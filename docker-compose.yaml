@@ -1,0 +1,30 @@
+services:
+  ros:
+    build: .
+    container_name: noetic
+    volumes:
+      # Workspaces for ROS
+      - ${PWD}/ros_basics:/home/ros-noetic/ros_basics
+      - ${PWD}/limo:/home/ros-noetic/limo
+      # System configurations to use GUI
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - /dev/dri:/dev/dri:rw
+    user: "ros-noetic"
+    network_mode: "host"
+    ipc: "host"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    environment: 
+      - DISPLAY=${DISPLAY}
+      - QT_X11_NO_MITSHM=1
+      - NVIDIA_VISIBLE_DEVICES=all
+      - XDG_RUNTIME_DIR=/run/user/1000
+      - NVIDIA_DRIVER_CAPABILITIES=compute,graphics,utility,display
+    runtime: nvidia
+    stdin_open: true
+    tty: true
