@@ -15,6 +15,17 @@ RUN apt-get update \
   && echo ${USERNAME} ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/${USERNAME}\
   && chmod 0440 /etc/sudoers.d/${USERNAME} \
   && rm -rf /var/lib/apt/lists/*
+# install ros package dependencies
+RUN apt-get update && apt-get install -y \
+  ros-noetic-ros-control \
+  ros-noetic-ros-controllers \
+  ros-noetic-teleop-twist-keyboard \
+  ros-noetic-moveit-simple-controller-manager \
+  ros-noetic-moveit-fake-controller-manager \
+  ros-noetic-moveit-setup-assistant \
+  ros-noetic-moveit-planners \
+  ros-noetic-moveit-ros-control-interface \
+  && rm -rf /var/lib/apt/lists/*
 # set up the entrypoint and bashrc
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh

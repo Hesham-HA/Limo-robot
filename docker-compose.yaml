@@ -19,6 +19,7 @@ services:
             - driver: nvidia
               count: all
               capabilities: [gpu]
+    restart: unless-stopped
     environment: 
       - DISPLAY=${DISPLAY}
       - QT_X11_NO_MITSHM=1
