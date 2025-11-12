@@ -2,5 +2,5 @@
 **/devel
 ros_basics/*
 **/__pycache__
-**CMakeLists.txt
+limo/src/CMakeLists.txt
 **.catkin_workspace
