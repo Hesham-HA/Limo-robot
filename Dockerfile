@@ -31,4 +31,5 @@ COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 COPY bashrc /home/${USERNAME}/.bashrc
 ENTRYPOINT ["/bin/bash" , "/entrypoint.sh"]
+WORKDIR /home/${USERNAME}
 CMD ["/bin/bash"]
