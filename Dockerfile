@@ -25,6 +25,8 @@ RUN apt-get update && apt-get install -y \
   ros-noetic-moveit-setup-assistant \
   ros-noetic-moveit-planners \
   ros-noetic-moveit-ros-control-interface \
+  ros-noetic-robot-pose-ekf \
+  ros-noetic-gmapping \
   && rm -rf /var/lib/apt/lists/*
 # set up the entrypoint and bashrc
 COPY entrypoint.sh /entrypoint.sh
