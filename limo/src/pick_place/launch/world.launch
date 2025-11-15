@@ -10,7 +10,7 @@
   <arg name="world_pose" default="-x 0 -y 0 -z 0 -R 0 -P 0 -Y 0" doc="Pose to spawn the robot at"/>
 
   <!-- Launch Gazebo and spawn the robot -->
-  <include file="$(find limo_cobot_moveit)/launch/gazebo.launch" pass_all_args="true"/>
+  <include file="$(dirname)/gazebo.launch" pass_all_args="true"/>
 
   <!-- Launch MoveIt -->
   <include file="$(find limo_cobot_moveit)/launch/demo.launch" pass_all_args="true">
