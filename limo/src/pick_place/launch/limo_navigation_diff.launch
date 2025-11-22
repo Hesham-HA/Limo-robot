@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <launch>
 	<arg name="map_file" default="$(find pick_place)/maps/clearpath_map.yaml"/>
-	<node pkg="map_server" name="map_server" type="map_server" agrs="$(arg map_file)"/>
+	<node pkg="map_server" name="map_server" type="map_server" args="$(arg map_file)"/>
 
 	<!-- use robot pose ekf to provide odometry-->
     <node pkg="robot_pose_ekf" name="robot_pose_ekf" type="robot_pose_ekf">
