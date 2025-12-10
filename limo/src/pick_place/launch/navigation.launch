@@ -1,0 +1,52 @@
+<?xml version="1.0"?>
+<launch>
+	<arg name="use_rviz" default="true"/>
+	<arg name="map_file" default="$(find pick_place)/maps/clearpath_map.yaml"/>
+	<arg name="map_frame_id" default="map"/>
+
+	<!--  **************** Map Server ****************  -->
+	<node pkg="map_server" name="map_server" type="map_server" args="$(arg map_file)">
+		<param name="frame_id" value="$(arg map_frame_id)"/>
+	</node>
+
+	<!--  **************** Pose estimation ****************  -->
+    <node pkg="robot_pose_ekf" name="robot_pose_ekf" type="robot_pose_ekf">
+        <param name="output_frame" value="odom"/>
+        <param name="base_footprint_frame" value="base_link"/>
+        <remap from="imu_data" to="imu"/>
+    </node>
+
+	<!--  ************** Localization ***************  -->
+	<node pkg="amcl" type="amcl" name="amcl" output="screen">
+		<remap from="scan" to="/limo/scan"/>
+        <rosparam file="$(find pick_place)/param/amcl_params_diff.yaml" command="load"/>
+	    <param name="initial_pose_x"            value="0"/>
+		<param name="initial_pose_y"            value="0"/>
+		<param name="initial_pose_a"            value="0"/>
+	</node>
+
+    <!--  ************** Navigation ***************  -->
+	<node pkg="move_base" type="move_base" respawn="false" name="move_base" output="screen">
+		<remap from="scan" to="/limo/scan"/>
+  	  	<rosparam file="$(find pick_place)/param/costmap_common_params.yaml" command="load" ns="global_costmap"/>
+  	 	<rosparam file="$(find pick_place)/param/costmap_common_params.yaml" command="load" ns="local_costmap"/>
+  		<rosparam file="$(find pick_place)/param/local_costmap_params.yaml" command="load"/>
+  		<rosparam file="$(find pick_place)/param/global_costmap_params.yaml" command="load"/>
+  		<rosparam file="$(find pick_place)/param/planner.yaml" command="load"/>
+		<param name="static_layer/map_topic" value="/map"/>
+		<param name="global_costmap/global_frame" value="$(arg map_frame_id)"/>
+		<param name="local_costmap/global_frame" value="$(arg map_frame_id)"/>
+
+		<param name="base_global_planner" value="global_planner/GlobalPlanner"/>
+		<param name="planner_frequency" value="1.0"/>
+		<param name="planner_patience" value="5.0"/>
+		<param name="base_local_planner" value="base_local_planner/TrajectoryPlannerROS"/>
+		<param name="controller_frequency" value="5.0"/>
+		<param name="controller_patience" value="15.0"/>
+        <param name="clearing_rotation_allowed" value="true"/>
+	</node>
+
+	<!--  **************** Visualisation ****************  -->
+	<node name="rviz" pkg="rviz" type="rviz" args="-d $(find pick_place)/rviz/navigation.rviz" if="$(arg use_rviz)"/>
+</launch>
+

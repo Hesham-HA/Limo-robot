@@ -83,21 +83,31 @@
          Run `sudo apt install ros-noetic-map-server`
    - Save the map using the map_server pkg:
          Run `rosrun map_server map_saver -f cleanpath_map`
-6. steps to run the navigation:
-   - Copy Limo's predefined limo_navigation_diff launch in         [limo_navigation_diff.launch](https://github.com/agilexrobotics/limo_ros/blob/master/limo_bringup/launch/limo_navigation_diff.launch) into `pick_place/launch` folder
-   - Copy the parameter files from inside the [diff file] (https://github.com/agilexrobotics/limo_ros/tree/master/limo_bringup/launch)
+
+## steps to run the navigation:
+
+1. Copy Limo's predefined limo_navigation_diff launch in  [limo_navigation_diff.launch](https://github.com/agilexrobotics/limo_ros/blob/master/limo_bringup/launch/limo_navigation_diff.launch) into `pick_place/launch` folder
+
+2. Copy the parameter files from inside the [diff file] (https://github.com/agilexrobotics/limo_ros/tree/master/limo_bringup/launch)
    - remove the diff folder from the path in the limo_navigation_diff file to match our path.
    - replace the limo_bringup pkg with our pkg name pick_place in the limo_navigation_diff.launch file.
-   - Copy Limo's predefined navigation_diff.rviz in         [navigation_diff.rviz](https://github.com/agilexrobotics/limo_ros/blob/master/limo_bringup/rviz/navigation_diff.rviz) into `pick_place/rviz` folder
-   - Define the map 
-   - Run `rosrun world.launch`
-   - inside the limo_navigation_diff.launch add the following tag in amcl node:*
-        `<remap from="/scan" to="/limo/scan" />`
-move_base node:*
-        `<remap from="/scan" to="/limo/scan" />`
-   - ins
-   - run `roslaunch pick_place limo_navigation_diff.launch`
-   - install the ros-noetic-amcl pckg using `sudo apt install ros-noetic-amcl`
-   - install the ros-noetic-move-base pckg using `sudo apt install ros-noetic-move-base`
-   - 
-   
+   - Copy Limo's predefined navigation_diff.rviz in [navigation_diff.rviz](https://github.com/agilexrobotics/limo_ros/blob/master/limo_bringup/rviz/navigation_diff.rviz) into `pick_place/rviz` folder
+ 
+3. Run the launch file for navigation:
+    - Add a map_server node to publish the map constructed by gmapping
+        ```bash
+        <arg name="map_file" default="$(find pick_place)/maps/clearpath_map.yaml"/>
+        <node pkg="map_server" name="map_server" type="map_server" args="$(arg map_file)"/>
+        ```
+    - Run `rosrun world.launch`
+    - inside the limo_navigation_diff.launch add the following tag in 
+        * amcl node:
+            
+            `<remap from="/scan" to="/limo/scan" />`
+        * move_base node:
+            
+            `<remap from="/scan" to="/limo/scan" />`
+    - run `roslaunch pick_place navigation.launch`
+    - install the ros-noetic-amcl pckg using `sudo apt install ros-noetic-amcl`
+    - install the ros-noetic-move-base pckg using `sudo apt install ros-noetic-move-base`
+    - install the ros-noetic-global-planner pckg using `sudo apt install ros-noetic-global-planner`
