@@ -6,6 +6,7 @@ NavfnROS:
   default_tolerance: 0.1 # A tolerance on the goal point for the planner.
 
 TrajectoryPlannerROS:
+  allow_unknown: true
   # Robot Configuration Parameters
   acc_lim_x: 2.5
   acc_lim_theta:  3.2
@@ -52,6 +53,7 @@ TrajectoryPlannerROS:
   escape_reset_theta: 0.1
 
 DWAPlannerROS:
+  allow_unknown: true
   # Robot configuration parameters  
   acc_lim_x: 2.5
   acc_lim_y: 0
