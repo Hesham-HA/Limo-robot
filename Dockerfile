@@ -33,7 +33,8 @@ RUN apt-get update && apt-get install -y \
   ros-noetic-amcl \
   ros-noetic-move-base \
   ros-noetic-explore-lite \
-  ros-noetic-slam-toolbox \
+  ros-noetic-rtabmap \
+  ros-noetic-find-object-2d \
   && rm -rf /var/lib/apt/lists/*
 # set up the entrypoint and bashrc
 COPY entrypoint.sh /entrypoint.sh

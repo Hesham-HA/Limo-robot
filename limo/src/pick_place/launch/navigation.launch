@@ -47,6 +47,6 @@
 	</node>
 
 	<!--  **************** Visualisation ****************  -->
-	<node name="rviz" pkg="rviz" type="rviz" args="-d $(find pick_place)/rviz/navigation.rviz" if="$(arg use_rviz)"/>
+	<node name="rviz" pkg="rviz" type="rviz" args="-d $(find pick_place)/config/navigation.rviz" if="$(arg use_rviz)"/>
 </launch>
 
