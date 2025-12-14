@@ -1,12 +1,3 @@
 [submodule "limo/src/limo_cobot_sim"]
 	path = limo/src/limo_cobot_sim
 	url = https://github.com/agilexrobotics/limo_cobot_sim.git
-[submodule "limo/src/full_coverage_path_planner"]
-	path = limo/src/full_coverage_path_planner
-	url = https://github.com/nobleo/full_coverage_path_planner.git
-[submodule "limo/src/tracking_pid"]
-	path = limo/src/tracking_pid
-	url = https://github.com/nobleo/tracking_pid.git
-[submodule "limo/src/swarm_functions"]
-	path = limo/src/swarm_functions
-	url = https://github.com/cpswarm/swarm_functions/
