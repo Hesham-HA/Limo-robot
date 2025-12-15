@@ -1,5 +1,6 @@
 **/build
 **/devel
+.gazebo
 ros_basics/*
 **/__pycache__
 .vscode

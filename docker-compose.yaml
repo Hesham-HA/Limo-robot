@@ -6,6 +6,7 @@ services:
       # Workspaces for ROS
       - ${PWD}/ros_basics:/home/ros-noetic/ros_basics
       - ${PWD}/limo:/home/ros-noetic/limo
+      - ${PWD}/.gazebo:/home/ros-noetic/.gazebo
       # System configurations to use GUI
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
       - /dev/dri:/dev/dri:rw
