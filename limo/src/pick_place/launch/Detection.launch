@@ -15,12 +15,14 @@
         <param name="settings_path"   value="$(find pick_place)/config/find_object.ini"/>
 
         <!-- Camera topics -->
-        <remap from="rgb/image_rect_color"         to="/camera/data_throttled_image"/>
-        <remap from="depth_registered/image_raw"   to="/camera/data_throttled_image_depth"/>
-        <remap from="depth_registered/camera_info" to="/camera/data_throttled_camera_info"/>
+        <remap from="rgb/image_rect_color"         to="/limo/color/image_raw"/>
+        <remap from="depth_registered/image_raw"   to="/limo/depth/image_raw"/>
+        <remap from="depth_registered/camera_info" to="/limo/color/camera_info"/>
 
         <param name="rgb/image_transport"              value="compressed"/>
-        <param name="depth_registered/image_transport" value="compressedDepth"/>
+        <param name="depth_registered/image_transport" value="raw"/>
     </node>
+    <!--  **************** Visualisation ****************  -->
+    <node if="$(arg use_rviz)" pkg="rviz" type="rviz" name="rviz" args="-d $(find pick_place)/config/find_object.rviz" output="screen"/>
 
 </launch>
