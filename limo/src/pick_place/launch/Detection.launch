@@ -22,7 +22,5 @@
         <param name="rgb/image_transport"              value="compressed"/>
         <param name="depth_registered/image_transport" value="raw"/>
     </node>
-    <!--  **************** Visualisation ****************  -->
-    <node if="$(arg use_rviz)" pkg="rviz" type="rviz" name="rviz" args="-d $(find pick_place)/config/find_object.rviz" output="screen"/>
-
+    
 </launch>
