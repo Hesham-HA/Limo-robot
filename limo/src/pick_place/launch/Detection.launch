@@ -1,5 +1,5 @@
 <launch>
-
+    
     <!-- Use simulation time if Gazebo -->
     <param name="use_sim_time" value="true"/>
 
@@ -23,4 +23,5 @@
         <param name="depth_registered/image_transport" value="raw"/>
     </node>
     
+
 </launch>
