@@ -7,6 +7,6 @@
     <!-- robot_description is loaded by gazebo.launch, to enable Gazebo features -->
     <arg name="load_robot_description" value="false" />
     <arg name="moveit_controller_manager" value="ros_control" />
-    <arg name="use_rviz" value="false"/>
+    <arg name="use_rviz" value="true"/>
   </include>
 </launch>
