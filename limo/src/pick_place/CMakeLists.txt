@@ -134,6 +134,7 @@ include_directories(
 ## With catkin_make all packages are built within a single CMake context
 ## The recommended prefix ensures that target names across packages don't collide
 add_executable(mobile_gripper src/mobile_gripper.cpp)
+add_executable(add_object src/add_object.cpp)
 
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
@@ -147,6 +148,7 @@ add_executable(mobile_gripper src/mobile_gripper.cpp)
 
 ## Specify libraries to link a library or executable target against
 target_link_libraries(mobile_gripper ${catkin_LIBRARIES} ${Boost_LIBRARIES})
+target_link_libraries(add_object ${catkin_LIBRARIES})
 
 #############
 ## Install ##
