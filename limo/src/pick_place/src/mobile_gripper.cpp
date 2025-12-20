@@ -112,7 +112,7 @@ void place(moveit::planning_interface::MoveGroupInterface& group)
 
   // Setting place location pose
   // +++++++++++++++++++++++++++
-  place_location[0].place_pose.header.frame_id = "panda_link0";
+  place_location[0].place_pose.header.frame_id = "base_link";
   tf2::Quaternion orientation;
   orientation.setRPY(0, 0, tau / 4);  // A quarter turn about the z-axis
   place_location[0].place_pose.pose.orientation = tf2::toMsg(orientation);
@@ -125,7 +125,7 @@ void place(moveit::planning_interface::MoveGroupInterface& group)
   // Setting pre-place approach
   // ++++++++++++++++++++++++++
   /* Defined with respect to frame_id */
-  place_location[0].pre_place_approach.direction.header.frame_id = "panda_link0";
+  place_location[0].pre_place_approach.direction.header.frame_id = "base_link";
   /* Direction is set as negative z axis */
   place_location[0].pre_place_approach.direction.vector.z = -1.0;
   place_location[0].pre_place_approach.min_distance = 0.095;
@@ -134,7 +134,7 @@ void place(moveit::planning_interface::MoveGroupInterface& group)
   // Setting post-grasp retreat
   // ++++++++++++++++++++++++++
   /* Defined with respect to frame_id */
-  place_location[0].post_place_retreat.direction.header.frame_id = "panda_link0";
+  place_location[0].post_place_retreat.direction.header.frame_id = "base_link";
   /* Direction is set as negative y axis */
   place_location[0].post_place_retreat.direction.vector.y = -1.0;
   place_location[0].post_place_retreat.min_distance = 0.1;
@@ -164,7 +164,7 @@ void addCollisionObjects(moveit::planning_interface::PlanningSceneInterface& pla
 
   // Add the first table where the cube will originally be kept.
   collision_objects[0].id = "table1";
-  collision_objects[0].header.frame_id = "panda_link0";
+  collision_objects[0].header.frame_id = "base_link";
 
   /* Define the primitive and its dimensions. */
   collision_objects[0].primitives.resize(1);
@@ -187,7 +187,7 @@ void addCollisionObjects(moveit::planning_interface::PlanningSceneInterface& pla
   // BEGIN_SUB_TUTORIAL table2
   // Add the second table where we will be placing the cube.
   collision_objects[1].id = "table2";
-  collision_objects[1].header.frame_id = "panda_link0";
+  collision_objects[1].header.frame_id = "base_link";
 
   /* Define the primitive and its dimensions. */
   collision_objects[1].primitives.resize(1);
@@ -209,7 +209,7 @@ void addCollisionObjects(moveit::planning_interface::PlanningSceneInterface& pla
 
   // BEGIN_SUB_TUTORIAL object
   // Define the object that we will be manipulating
-  collision_objects[2].header.frame_id = "panda_link0";
+  collision_objects[2].header.frame_id = "base_link";
   collision_objects[2].id = "object";
 
   /* Define the primitive and its dimensions. */
@@ -242,7 +242,7 @@ int main(int argc, char** argv)
 
   ros::WallDuration(1.0).sleep();
   moveit::planning_interface::PlanningSceneInterface planning_scene_interface;
-  moveit::planning_interface::MoveGroupInterface group("panda_arm");
+  moveit::planning_interface::MoveGroupInterface group("arm");
   group.setPlanningTime(45.0);
 
   addCollisionObjects(planning_scene_interface);

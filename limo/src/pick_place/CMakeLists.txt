@@ -11,11 +11,14 @@ find_package(catkin REQUIRED COMPONENTS
   roscpp
   rospy
   std_msgs
+  cmake_modules
+  moveit_ros_planning_interface
 )
 
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
-
+find_package(Eigen REQUIRED)
+find_package(PCL REQUIRED)
 
 ## Uncomment this if the package has a setup.py. This macro ensures
 ## modules and global scripts declared therein get installed
@@ -118,6 +121,8 @@ catkin_package(
 include_directories(
 # include
   ${catkin_INCLUDE_DIRS}
+  ${Eigen_INCLUDE_DIRS}
+  ${PCL_INCLUDE_DIRS}
 )
 
 ## Declare a C++ library
@@ -148,7 +153,7 @@ add_executable(add_object src/add_object.cpp)
 
 ## Specify libraries to link a library or executable target against
 target_link_libraries(mobile_gripper ${catkin_LIBRARIES} ${Boost_LIBRARIES})
-target_link_libraries(add_object ${catkin_LIBRARIES})
+target_link_libraries(add_object ${catkin_LIBRARIES} ${PCL_LIBRARIES})
 
 #############
 ## Install ##
