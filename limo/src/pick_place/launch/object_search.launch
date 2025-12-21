@@ -57,7 +57,7 @@
         <!-- Camera topics -->
         <remap from="rgb/image_rect_color" to="/limo/color/image_raw"/>
         <remap from="depth_registered/image_raw" to="/limo/depth/image_raw"/>
-        <remap from="depth_registered/camera_info" to="/limo/color/camera_info"/>
+        <remap from="depth_registered/camera_info" to="/limo/depth/camera_info"/>
         <param name="rgb/image_transport" value="compressed"/>
         <param name="depth_registered/image_transport" value="raw"/>
     </node>
