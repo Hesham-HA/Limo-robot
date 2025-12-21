@@ -1,5 +1,8 @@
 **/build
 **/devel
+**/.catkin_tools
+**/logs
+**/install
 .gazebo
 ros_basics/*
 **/__pycache__
