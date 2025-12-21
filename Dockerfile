@@ -36,6 +36,10 @@ RUN apt-get update && apt-get install -y \
   ros-noetic-rtabmap \
   ros-noetic-rtabmap-ros \
   ros-noetic-find-object-2d \
+  ros-noetic-moveit-commander \
+  ros-noetic-moveit-task-constructor-core \
+  ros-noetic-moveit-task-constructor-visualization \
+  libfmt-dev \
   && rm -rf /var/lib/apt/lists/*
 # set up the entrypoint and bashrc
 COPY entrypoint.sh /entrypoint.sh

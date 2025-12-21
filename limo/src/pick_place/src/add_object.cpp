@@ -29,8 +29,8 @@ public:
     // ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     // Define a collision object ROS message.
     moveit_msgs::CollisionObject collision_object;
-    collision_object.header.frame_id = "camera_rgb_optical_frame";
-    collision_object.id = "cylinder";
+    collision_object.header.frame_id = "base_footprint";
+    collision_object.id = "object";
 
     // Define a cylinder which will be added to the world.
     shape_msgs::SolidPrimitive primitive;

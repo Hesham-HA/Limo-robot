@@ -1,0 +1,11 @@
+<?xml version="1.0"?>
+<launch>
+    <!--  *************** Object Detection ****************  -->
+    <node name="detect_add_object" pkg="pick_place" type="add_object">
+        <remap from="/camera/depth_registered/points" to="/limo/depth/points"/>
+    </node>
+
+	<!--  *************** Pick/Place MTC ****************  -->
+    <node name="mobile_gripper" pkg="pick_place" type="mobile_gripper">
+    </node>
+</launch>
