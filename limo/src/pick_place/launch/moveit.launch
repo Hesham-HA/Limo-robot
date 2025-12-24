@@ -5,7 +5,7 @@
   <!-- By default, we are not in debug mode -->
   <arg name="debug" default="false" />
   <!-- Choose controller manager: simple, or ros_control -->
-  <arg name="moveit_controller_manager" default="ros_control" />
+  <arg name="moveit_controller_manager" default="simple" />
   <!-- Set execution mode for fake execution controllers -->
   <arg name="fake_execution_type" default="interpolate" />
 

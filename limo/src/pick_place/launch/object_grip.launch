@@ -1,11 +1,52 @@
 <?xml version="1.0"?>
 <launch>
-    <!--  *************** Object Detection ****************  -->
-    <node name="detect_add_object" pkg="pick_place" type="add_object">
-        <remap from="/camera/depth_registered/points" to="/limo/depth/points"/>
+    <node name="find_object_3d" pkg="find_object_2d" type="find_object_2d" output="screen">
+        <param name="gui"             value="true"/>
+        <param name="subscribe_depth" value="true"/>
+		<param name="approx_sync" value="false" type="bool"/>
+
+        <!-- Path to object images -->
+        <param name="objects_path" value="$(find pick_place)/objects/Can"/>
+        <param name="settings_path" value="$(find pick_place)/config/find_object.ini"/>
+
+        <!-- Camera topics -->
+        <remap from="rgb/image_rect_color" to="/limo/color/image_raw"/>
+        <remap from="depth_registered/image_raw" to="/limo/depth/image_raw"/>
+        <remap from="depth_registered/camera_info" to="/limo/depth/camera_info"/>
+        <param name="rgb/image_transport" value="compressed"/>
+        <param name="depth_registered/image_transport" value="raw"/>
+    </node>
+    <node name="object_extractor" pkg="pick_place" type="object_extractor.py" output="screen">
+		<param name="object_prefix" value="object" type="str"/>
+        <remap from="/camera/color/camera_info" to="/limo/color/camera_info" />
+	</node>
+
+    <!--  *************** Add Object Service ****************  -->
+    <node name="add_object_service" pkg="pick_place" type="add_object" output="screen">
+        <remap from="/camera/depth/points" to="/limo/depth/points" />
+        <remap from="/object_bounding_boxes" to="/detection/object" />
+        <param name="bbox_scale_factor" value="0.95" />
+        <param name="plane_distance_threshold" value="0.015" />
+        <param name="cylinder_score_threshold" value="0.4" />
+        <param name="plane_max_iterations" value="500" />
+        <param name="plane_probability" value="0.95" />
+        <param name="use_multiple_plane_removal" value="false" />
+        <param name="object_scale_factor" value="0.70" />
     </node>
 
-	<!--  *************** Pick/Place MTC ****************  -->
-    <node name="mobile_gripper" pkg="pick_place" type="mobile_gripper">
+	<!--  *************** Pick/Place Service ****************  -->
+    <node name="mobile_gripper" pkg="pick_place" type="mobile_gripper" output="screen">
+        <param name="rosconsole_logger_levels" value="moveit_task_constructor=DEBUG, moveit_ros_planning=INFO, moveit_core=INFO"/>
+        <remap from="/object_bounding_boxes" to="/detection/object" />
+        <param name="bbox_scale_factor" value="0.80" />
+        <param name="use_scene_object" value="true" />
+        <param name="object_name" value="detected_object" />
+        <param name="table_name" value="detected_table" />
+        <param name="zero_state_name" value="zero" />
+        <param name="top_grip_state_name" value="top_grip" />
+        <param name="front_grip_state_name" value="front_grip" />
+        <param name="arm_group" value="arm" />
+        <param name="gripper_group" value="gripper" />
+        <param name="grasp_joint" value="grasping_frame_joint" />
     </node>
 </launch>
