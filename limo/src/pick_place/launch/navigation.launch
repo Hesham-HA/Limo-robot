@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <launch>
 	<arg name="use_rviz" default="true"/>
-	<arg name="map_file" default="$(find pick_place)/maps/clearpath_map.yaml"/>
+	<arg name="map_file" default="$(find pick_place)/maps/office_map.yaml"/>
 	<arg name="map_frame_id" default="map"/>
 
 	<!--  **************** Map Server ****************  -->
