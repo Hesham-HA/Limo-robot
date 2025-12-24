@@ -3,10 +3,9 @@ Panels:
     Help Height: 0
     Name: Displays
     Property Tree Widget:
-      Expanded:
-        - /MotionPlanning1
+      Expanded: ~
       Splitter Ratio: 0.5
-    Tree Height: 192
+    Tree Height: 181
   - Class: rviz/Help
     Name: Help
   - Class: rviz/Views
@@ -42,7 +41,7 @@ Visualization Manager:
     - Acceleration_Scaling_Factor: 0.1
       Class: moveit_rviz_plugin/MotionPlanning
       Enabled: true
-      JointsTab_Use_Radians: false
+      JointsTab_Use_Radians: true
       Move Group Namespace: ""
       MoveIt_Allow_Approximate_IK: false
       MoveIt_Allow_External_Program: false
@@ -197,7 +196,7 @@ Visualization Manager:
         Show Workspace: false
         Start State Alpha: 1
         Start State Color: 0; 255; 0
-      Planning Scene Topic: move_group/monitored_planning_scene
+      Planning Scene Topic: /move_group/monitored_planning_scene
       Robot Description: robot_description
       Scene Geometry:
         Scene Alpha: 1
@@ -209,7 +208,7 @@ Visualization Manager:
       Scene Robot:
         Attached Body Color: 150; 50; 150
         Links:
-          All Links Enabled: false
+          All Links Enabled: true
           Expand Joint Details: false
           Expand Link Details: false
           Expand Tree: false
@@ -222,12 +221,12 @@ Visualization Manager:
             Alpha: 1
             Show Axes: false
             Show Trail: false
-            Value: false
+            Value: true
           depth_camera_link:
             Alpha: 1
             Show Axes: false
             Show Trail: false
-            Value: false
+            Value: true
           depth_link:
             Alpha: 1
             Show Axes: false
@@ -236,27 +235,27 @@ Visualization Manager:
             Alpha: 1
             Show Axes: false
             Show Trail: false
-            Value: false
+            Value: true
           front_right_wheel_link:
             Alpha: 1
             Show Axes: false
             Show Trail: false
-            Value: false
+            Value: true
           gripper_finger_link1:
             Alpha: 1
             Show Axes: false
             Show Trail: false
-            Value: false
+            Value: true
           gripper_finger_link2:
             Alpha: 1
             Show Axes: false
             Show Trail: false
-            Value: false
+            Value: true
           imu_link:
             Alpha: 1
             Show Axes: false
             Show Trail: false
-            Value: false
+            Value: true
           inertial_link:
             Alpha: 1
             Show Axes: false
@@ -265,62 +264,90 @@ Visualization Manager:
             Alpha: 1
             Show Axes: false
             Show Trail: false
-            Value: false
+            Value: true
           joint2:
             Alpha: 1
             Show Axes: false
             Show Trail: false
-            Value: false
+            Value: true
           joint3:
             Alpha: 1
             Show Axes: false
             Show Trail: false
-            Value: false
+            Value: true
           joint4:
             Alpha: 1
             Show Axes: false
             Show Trail: false
-            Value: false
+            Value: true
           joint5:
             Alpha: 1
             Show Axes: false
             Show Trail: false
-            Value: false
+            Value: true
           joint6:
             Alpha: 1
             Show Axes: false
             Show Trail: false
-            Value: false
+            Value: true
           joint6_flange:
             Alpha: 1
             Show Axes: false
             Show Trail: false
-            Value: false
+            Value: true
           laser_link:
             Alpha: 1
             Show Axes: false
             Show Trail: false
-            Value: false
+            Value: true
           rear_left_wheel_link:
             Alpha: 1
             Show Axes: false
             Show Trail: false
-            Value: false
+            Value: true
           rear_right_wheel_link:
             Alpha: 1
             Show Axes: false
             Show Trail: false
-            Value: false
+            Value: true
         Robot Alpha: 0.5
         Show Robot Collision: false
-        Show Robot Visual: true
+        Show Robot Visual: false
       Value: true
       Velocity_Scaling_Factor: 0.1
+    - Alpha: 1
+      Autocompute Intensity Bounds: true
+      Autocompute Value Bounds:
+        Max Value: 10
+        Min Value: -10
+        Value: true
+      Axis: Z
+      Channel Name: intensity
+      Class: rviz/PointCloud2
+      Color: 255; 255; 255
+      Color Transformer: RGB8
+      Decay Time: 0
+      Enabled: true
+      Invert Rainbow: false
+      Max Color: 255; 255; 255
+      Min Color: 0; 0; 0
+      Name: PointCloud2
+      Position Transformer: XYZ
+      Queue Size: 10
+      Selectable: true
+      Size (Pixels): 3
+      Size (m): 0.009999999776482582
+      Style: Flat Squares
+      Topic: /limo/depth/points
+      Unreliable: false
+      Use Fixed Frame: true
+      Use rainbow: true
+      Value: true
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48
     Default Light: true
-    Fixed Frame: base_footprint
+    Fixed Frame: odom
     Frame Rate: 30
   Name: root
   Tools:
@@ -340,17 +367,17 @@ Visualization Manager:
         Value: false
       Field of View: 0.75
       Focal Point:
-        X: -0.1136067658662796
-        Y: 0.23990707099437714
-        Z: 0.30944114923477173
+        X: 0.24470317363739014
+        Y: 0.43665045499801636
+        Z: 0.2358703762292862
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.41499999165534973
+      Pitch: 0.33999964594841003
       Target Frame: base_footprint
-      Yaw: 5.6799492835998535
+      Yaw: 5.25493049621582
     Saved: ~
 Window Geometry:
   Displays:
@@ -364,9 +391,9 @@ Window Geometry:
     collapsed: false
   MotionPlanning - Trajectory Slider:
     collapsed: false
-  QMainWindow State: 000000ff00000000fd0000000100000000000001f30000026afc0200000007fb000000100044006900730070006c006100790073010000003b000000fb000000c700fffffffb0000000800480065006c00700000000342000000bb0000006e00fffffffb0000000a00560069006500770073000000010c000000a4000000a000fffffffb0000000c00430061006d00650072006100000002ff000001610000000000000000fb0000001e004d006f00740069006f006e00200050006c0061006e006e0069006e00670100000374000001890000000000000000fb00000044004d006f00740069006f006e0050006c0061006e006e0069006e00670020002d0020005400720061006a006500630074006f0072007900200053006c00690064006500720000000000ffffffff0000001600000016fb0000001c004d006f00740069006f006e0050006c0061006e006e0069006e0067010000013c000001690000016900ffffff0000031f0000026a00000001000000020000000100000002fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
+  QMainWindow State: 000000ff00000000fd0000000100000000000001f30000026afc0200000007fb000000100044006900730070006c006100790073010000003b000000f0000000c700fffffffb0000000800480065006c00700000000342000000bb0000006e00fffffffb0000000a00560069006500770073000000010c000000a4000000a000fffffffb0000000c00430061006d00650072006100000002ff000001610000000000000000fb0000001e004d006f00740069006f006e00200050006c0061006e006e0069006e00670100000374000001890000000000000000fb00000044004d006f00740069006f006e0050006c0061006e006e0069006e00670020002d0020005400720061006a006500630074006f0072007900200053006c00690064006500720000000000ffffffff0000001600000016fb0000001c004d006f00740069006f006e0050006c0061006e006e0069006e00670100000131000001740000016900ffffff0000031f0000026a00000001000000020000000100000002fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
   Views:
     collapsed: false
   Width: 1304
-  X: 62
-  Y: 27
+  X: 172
+  Y: 62

@@ -50,18 +50,19 @@
   <!--   <doc_depend>doxygen</doc_depend> -->
   <buildtool_depend>catkin</buildtool_depend>
   <depend>cmake_modules</depend>
+  <depend>libpcl-all-dev</depend>
   <depend>roscpp</depend>
   <depend>rospy</depend>
   <depend>std_msgs</depend>
+  <depend>std_srvs</depend>
   <depend>moveit_core</depend>
   <depend>moveit_ros_planning</depend>
   <depend>moveit_ros_planning_interface</depend>
   <depend>moveit_task_constructor_core</depend>
   <depend>moveit_task_constructor_msgs</depend>
   <depend>moveit_task_constructor_visualization</depend>
-  <build_depend>libpcl-all-dev</build_depend>
-  <exec_depend>libpcl-all-dev</exec_depend>
-
+  <build_export_depend>eigen</build_export_depend>
+  <exec_depend>message_runtime</exec_depend>
 
   <!-- The export tag contains other, unspecified, tags -->
   <export>
