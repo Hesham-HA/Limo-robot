@@ -337,8 +337,7 @@ public:
     }
   }
 
-  void filterPointCloudByBBox(pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud,
-                               const visualization_msgs::Marker& bbox)
+  void filterPointCloudByBBox(pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, const visualization_msgs::Marker& bbox)
   {
     // Extract bounding box center and dimensions
     double cx = bbox.pose.position.x;
@@ -346,12 +345,11 @@ public:
     double cz = bbox.pose.position.z;
     
     // TIGHTER fit - use bbox_scale_factor_ (default 0.9 = 90% of original bbox)
-    double half_x = bbox.scale.x / 2.0 * bbox_scale_factor_;
-    double half_y = bbox.scale.y / 2.0 * bbox_scale_factor_;
-    double half_z = bbox.scale.z / 2.0 * bbox_scale_factor_;
+    double half_x = bbox.scale.x / 2.0; // * bbox_scale_factor_;
+    double half_y = bbox.scale.y / 2.0; // * bbox_scale_factor_;
+    double half_z = bbox.scale.z / 2.0; // * bbox_scale_factor_;
     
-    ROS_INFO("Filter box: center=[%.3f,%.3f,%.3f], half_size=[%.3f,%.3f,%.3f]",
-             cx, cy, cz, half_x, half_y, half_z);
+    ROS_INFO("Filter box: center=[%.3f,%.3f,%.3f], half_size=[%.3f,%.3f,%.3f]", cx, cy, cz, half_x, half_y, half_z);
     
     // Apply passthrough filters
     pcl::PassThrough<pcl::PointXYZ> pass;
@@ -419,8 +417,7 @@ public:
     
     // NEW: Only remove plane if it's actually large (likely the table)
     double plane_ratio = static_cast<double>(inliers_plane->indices.size()) / cloud->points.size();
-    ROS_INFO("Plane has %zu inliers (%.1f%% of cloud)", 
-            inliers_plane->indices.size(), plane_ratio * 100.0);
+    ROS_INFO("Plane has %zu inliers (%.1f%% of cloud)", inliers_plane->indices.size(), plane_ratio * 100.0);
     
     // NEW: Only remove if plane is significant (> 30% of points)
     if (plane_ratio < 0.3)
@@ -454,7 +451,7 @@ public:
     segmentor.setNormalDistanceWeight(0.1);
     segmentor.setMaxIterations(10000);  // More iterations for better fit
     segmentor.setDistanceThreshold(0.01);
-    segmentor.setRadiusLimits(0.015, 0.08);  // Typical can: 3-8cm radius
+    segmentor.setRadiusLimits(0.01, 0.08);  // Typical can: 2-8cm radius
     segmentor.setInputCloud(cloud);
     segmentor.setInputNormals(cloud_normals);
     
@@ -480,9 +477,7 @@ public:
       extract.filter(*cylinder_cloud);
       
       // Get min/max along cylinder axis
-      Eigen::Vector3d axis_dir(params.direction_vec[0], 
-                              params.direction_vec[1], 
-                              params.direction_vec[2]);
+      Eigen::Vector3d axis_dir(params.direction_vec[0], params.direction_vec[1], params.direction_vec[2]);
       axis_dir.normalize();
       
       double min_proj = std::numeric_limits<double>::max();
@@ -570,8 +565,8 @@ public:
       primitive.type = primitive.CYLINDER;
       primitive.dimensions.resize(2);
       // NEW: Scale down the dimensions
-      primitive.dimensions[primitive.CYLINDER_HEIGHT] = params.height;
-      primitive.dimensions[primitive.CYLINDER_RADIUS] = params.radius * object_scale_factor_;
+      primitive.dimensions[primitive.CYLINDER_HEIGHT] = params.height; // / object_scale_factor;
+      primitive.dimensions[primitive.CYLINDER_RADIUS] = params.radius; // * object_scale_factor_;
       
       ROS_INFO("Scaled cylinder: h=%.3fm (%.3f%%), r=%.3fm (%.3f%%)",
               primitive.dimensions[primitive.CYLINDER_HEIGHT],
@@ -584,8 +579,8 @@ public:
       primitive.type = primitive.BOX;
       primitive.dimensions.resize(3);
       // NEW: Scale down the dimensions
-      primitive.dimensions[primitive.BOX_X] = params.box_dimensions[0] * object_scale_factor_;
-      primitive.dimensions[primitive.BOX_Y] = params.box_dimensions[1] * object_scale_factor_;
+      primitive.dimensions[primitive.BOX_X] = params.box_dimensions[0]; // * object_scale_factor_;
+      primitive.dimensions[primitive.BOX_Y] = params.box_dimensions[1]; // * object_scale_factor_;
       primitive.dimensions[primitive.BOX_Z] = params.box_dimensions[2];
       
       ROS_INFO("Scaled box: [%.3f x %.3f x %.3f]m (%.3f%%)",

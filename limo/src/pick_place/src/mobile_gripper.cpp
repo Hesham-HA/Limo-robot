@@ -29,8 +29,8 @@ private:
   std::string object_name_;
   std::string table_name_;
   std::string zero_state_name_;
-  std::string top_grip_state_name;
-  std::string front_grip_state_name;
+  std::string top_grip_state_name_;
+  std::string front_grip_state_name_;
   std::string arm_group_name;
   std::string gripper_group_name;
   std::string grasp_joint_name;
@@ -58,8 +58,8 @@ public:
     nh_.param<std::string>("object_name", object_name_, "detected_object");
     nh_.param<std::string>("table_name", table_name_, "detected_table");
     nh_.param<std::string>("zero_state_name", zero_state_name_, "zero");
-    nh_.param<std::string>("top_grip_state_name", top_grip_state_name, "top_grip");
-    nh_.param<std::string>("front_grip_state_name", front_grip_state_name, "front_grip");
+    nh_.param<std::string>("top_grip_state_name", top_grip_state_name_, "top_grip");
+    nh_.param<std::string>("front_grip_state_name", front_grip_state_name_, "front_grip");
     nh_.param<std::string>("arm_group", arm_group_name, "arm");
     nh_.param<std::string>("gripper_group", gripper_group_name, "gripper");
     nh_.param<std::string>("grasp_joint", grasp_joint_name, "grasping_frame_joint");
@@ -161,7 +161,8 @@ public:
     
     geometry_msgs::PoseStamped object_pose;
     std::string frame_id;
-    
+    std::string wide_or_tall;
+
     if (use_scene_object_)
     {
       // Get object from planning scene
@@ -178,7 +179,9 @@ public:
       object_pose.header = obj.header;
       object_pose.pose = obj.primitive_poses[0];
       frame_id = obj.header.frame_id;
-      
+
+      // find out if the object is wide or tall
+      wide_or_tall = obj.primitives[0].dimensions[0] > obj.primitives[0].dimensions[2] ? "wide" : "tall";
       ROS_INFO("Using object from planning scene");
     }
     else
@@ -195,16 +198,15 @@ public:
       object_pose = manual_object_pose_;
       frame_id = manual_object_pose_.header.frame_id;
       
-      // Add manual object to planning scene for collision checking
-      addManualObjectToScene();
-      
+      // Add manual object to planning scene for collision checking and find out if it's wide or tall
+      wide_or_tall = addManualObjectToScene();
       ROS_INFO("Using manual object from bounding box");
     }
     
     ROS_INFO_STREAM("Object pose: " << object_pose);
     
     // Execute pick and lift
-    bool success = pickAndLift(object_pose, frame_id);
+    bool success = pickAndLift(object_pose, frame_id, wide_or_tall);
     
     if (success)
     {
@@ -279,20 +281,32 @@ public:
     return true;
   }
   
-  bool pickAndLift(const geometry_msgs::PoseStamped& object_pose, const std::string& frame_id)
+  bool pickAndLift(const geometry_msgs::PoseStamped& object_pose, const std::string& frame_id, const std::string& wide_or_tall)
   {
-    // 1. Open gripper
+    // 1. Select appropriate initial pose for object gripping
+    ROS_INFO("Selecting opening position...");
+    std::string initial_state;
+    if (wide_or_tall=="wide"){
+      initial_state = front_grip_state_name_;
+    }else{
+      initial_state = top_grip_state_name_;
+    }
+    if (!returnToZero(initial_state)){
+      ROS_WARN("Failed to move to opening position! Trying to plan with the current pose...");
+    }
+    
+    // 2. Open gripper
     ROS_INFO("Opening gripper...");
     if (!openGripper())
     {
       ROS_ERROR("Failed to open gripper");
       return false;
     }
-    // 2. Calculate grasp pose (approach from side)
+    // 3. Calculate grasp pose (approach from side)
     geometry_msgs::PoseStamped grasp_pose = object_pose;
     grasp_pose.pose.position.x -= 0.08;  // 8cm back from object
     grasp_pose.pose.orientation = tf2::toMsg(tf2::Quaternion(0, M_PI/2, 0));
-    // 3. Move to grasp pose
+    // 4. Move to grasp pose
     ROS_INFO("Moving to grasp pose...");
     arm_group_->setPoseReferenceFrame(frame_id);
     arm_group_->setPoseTarget(grasp_pose);
@@ -308,7 +322,7 @@ public:
       ROS_ERROR("Failed to execute grasp motion");
       return false;
     }
-    // 4. Close gripper
+    // 5. Close gripper
     ros::Duration(0.5).sleep();  // Brief pause
     ROS_INFO("Closing gripper...");
     if (!closeGripper())
@@ -316,7 +330,7 @@ public:
       ROS_ERROR("Failed to close gripper");
       return false;
     }
-    // 5. Attach object to gripper
+    // 6. Attach object to gripper
     ROS_INFO("Attaching object...");
     auto objects = planning_scene_interface_->getObjects({object_name_});
     if (!objects.empty())
@@ -328,7 +342,7 @@ public:
       aco.object.operation = aco.object.ADD;
       planning_scene_interface_->applyAttachedCollisionObject(aco);
     }
-    // 6. Lift object
+    // 7. Lift object
     ROS_INFO("Lifting object...");
     geometry_msgs::PoseStamped lift_pose = grasp_pose;
     lift_pose.pose.position.z += 0.15;  // Lift 15cm
@@ -338,9 +352,9 @@ public:
       ROS_ERROR("Failed to lift object");
       return false;
     }
-    // 7. Return to initial/home pose
+    // 8. Return to initial/home pose
     ROS_INFO("Returning to home position...");
-    if (!returnToZero())
+    if (!returnToZero(zero_state_name_))
     {
       ROS_WARN("Failed to return to home, but object is picked");
     }
@@ -377,22 +391,22 @@ public:
     arm_group_->move();
     // 5. Return to initial/home pose
     ROS_INFO("Returning to home position...");
-    if (!returnToZero())
+    if (!returnToZero(zero_state_name_))
     {
       ROS_WARN("Failed to return to home, but object is placed");
     }
     return true;
   }
   
-  bool returnToZero()
+  bool returnToZero(const std::string state_name)
   {
     // Try to use named state first
     std::vector<std::string> named_targets = arm_group_->getNamedTargets();
     
-    if (std::find(named_targets.begin(), named_targets.end(), zero_state_name_) != named_targets.end())
+    if (std::find(named_targets.begin(), named_targets.end(), state_name) != named_targets.end())
     {
-      ROS_INFO("Using named state: %s", zero_state_name_.c_str());
-      arm_group_->setNamedTarget(zero_state_name_);
+      ROS_INFO("Using named state: %s", state_name.c_str());
+      arm_group_->setNamedTarget(state_name);
       return bool(arm_group_->move());
     }
     else if (has_initial_pose_)
@@ -408,9 +422,9 @@ public:
     }
   }
   
-  void addManualObjectToScene()
+  std::string addManualObjectToScene()
   {
-    if (!has_manual_object_) return;
+    if (!has_manual_object_) return "none";
     
     // Remove existing first
     std::vector<std::string> object_ids = {object_name_};
@@ -436,6 +450,8 @@ public:
     planning_scene_interface_->applyCollisionObject(collision_object);
     
     ROS_INFO("Added manual object to planning scene");
+    
+    return primitive.dimensions[0] > primitive.dimensions[2] ? "wide" : "tall";
   }
   
   void spin()

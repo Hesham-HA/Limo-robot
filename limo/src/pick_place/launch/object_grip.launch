@@ -18,6 +18,7 @@
     </node>
     <node name="object_extractor" pkg="pick_place" type="object_extractor.py" output="screen">
 		<param name="object_prefix" value="object" type="str"/>
+        <param name="target_frame_id" value="depth_link"/>
         <remap from="/camera/color/camera_info" to="/limo/color/camera_info" />
 	</node>
 
@@ -25,7 +26,7 @@
     <node name="add_object_service" pkg="pick_place" type="add_object" output="screen">
         <remap from="/camera/depth/points" to="/limo/depth/points" />
         <remap from="/object_bounding_boxes" to="/detection/object" />
-        <param name="bbox_scale_factor" value="0.95" />
+        <param name="bbox_scale_factor" value="1.1" />
         <param name="plane_distance_threshold" value="0.015" />
         <param name="cylinder_score_threshold" value="0.4" />
         <param name="plane_max_iterations" value="500" />
@@ -35,7 +36,7 @@
     </node>
 
 	<!--  *************** Pick/Place Service ****************  -->
-    <node name="mobile_gripper" pkg="pick_place" type="mobile_gripper" output="screen">
+    <!-- <node name="mobile_gripper" pkg="pick_place" type="mobile_gripper" output="screen">
         <param name="rosconsole_logger_levels" value="moveit_task_constructor=DEBUG, moveit_ros_planning=INFO, moveit_core=INFO"/>
         <remap from="/object_bounding_boxes" to="/detection/object" />
         <param name="bbox_scale_factor" value="0.80" />
@@ -48,5 +49,5 @@
         <param name="arm_group" value="arm" />
         <param name="gripper_group" value="gripper" />
         <param name="grasp_joint" value="grasping_frame_joint" />
-    </node>
+    </node> -->
 </launch>
