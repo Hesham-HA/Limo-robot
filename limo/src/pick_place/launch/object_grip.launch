@@ -4,6 +4,7 @@
         <param name="gui"             value="true"/>
         <param name="subscribe_depth" value="true"/>
 		<param name="approx_sync" value="false" type="bool"/>
+        <param name="object_prefix" value="object" type="str"/>
 
         <!-- Path to object images -->
         <param name="objects_path" value="$(find pick_place)/objects/Can"/>
@@ -23,17 +24,16 @@
 	</node>
 
     <!--  *************** Add Object Service ****************  -->
-    <node name="add_object_service" pkg="pick_place" type="add_object" output="screen">
+    <!-- <node name="add_object_service" pkg="pick_place" type="add_object" output="screen">
         <remap from="/camera/depth/points" to="/limo/depth/points" />
         <remap from="/object_bounding_boxes" to="/detection/object" />
-        <param name="bbox_scale_factor" value="1.1" />
+        <param name="bbox_scale_factor" value="0.9" />
         <param name="plane_distance_threshold" value="0.015" />
         <param name="cylinder_score_threshold" value="0.4" />
         <param name="plane_max_iterations" value="500" />
         <param name="plane_probability" value="0.95" />
         <param name="use_multiple_plane_removal" value="false" />
-        <param name="object_scale_factor" value="0.70" />
-    </node>
+    </node> -->
 
 	<!--  *************** Pick/Place Service ****************  -->
     <!-- <node name="mobile_gripper" pkg="pick_place" type="mobile_gripper" output="screen">

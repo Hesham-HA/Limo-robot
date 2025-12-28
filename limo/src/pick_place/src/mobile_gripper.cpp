@@ -158,11 +158,9 @@ public:
   bool pickService(std_srvs::Trigger::Request& req, std_srvs::Trigger::Response& res)
   {
     ROS_INFO("======== PICK SERVICE CALLED ========");
-    
     geometry_msgs::PoseStamped object_pose;
     std::string frame_id;
     std::string wide_or_tall;
-
     if (use_scene_object_)
     {
       // Get object from planning scene
@@ -174,15 +172,51 @@ public:
         ROS_ERROR_STREAM(res.message);
         return true;
       }
-      
       const auto& obj = objects.begin()->second;
+      // CRITICAL DEBUG: Print what we actually got
+      ROS_INFO("=== RETRIEVED OBJECT ===");
+      ROS_INFO("  Frame: %s", obj.header.frame_id.c_str());
+      ROS_INFO("  Timestamp: %.3f", obj.header.stamp.toSec());
+      ROS_INFO("  Position: [%.3f, %.3f, %.3f]",
+        obj.primitive_poses[0].position.x,
+        obj.primitive_poses[0].position.y,
+        obj.primitive_poses[0].position.z
+      );
       object_pose.header = obj.header;
       object_pose.pose = obj.primitive_poses[0];
       frame_id = obj.header.frame_id;
-
       // find out if the object is wide or tall
-      wide_or_tall = obj.primitives[0].dimensions[0] > obj.primitives[0].dimensions[2] ? "wide" : "tall";
-      ROS_INFO("Using object from planning scene");
+      auto& prim = obj.primitives[0];
+      if (prim.type == shape_msgs::SolidPrimitive::CYLINDER)
+      {
+        double height = prim.dimensions[shape_msgs::SolidPrimitive::CYLINDER_HEIGHT];
+        double radius = prim.dimensions[shape_msgs::SolidPrimitive::CYLINDER_RADIUS];
+        double diameter = 2.0 * radius;
+        
+        wide_or_tall = (height > diameter * 1.5) ? "tall" : "wide";
+        
+        ROS_INFO("CYLINDER detected: h=%.3fm, r=%.3fm (d=%.3fm) → %s",
+                height, radius, diameter, wide_or_tall.c_str());
+      }
+      else if (prim.type == shape_msgs::SolidPrimitive::BOX)
+      {
+        double length = prim.dimensions[shape_msgs::SolidPrimitive::BOX_X];
+        double width = prim.dimensions[shape_msgs::SolidPrimitive::BOX_Y];
+        double height = prim.dimensions[shape_msgs::SolidPrimitive::BOX_Z];
+        double max_base = std::max(length, width);
+        
+        wide_or_tall = (height > max_base * 1.5) ? "tall" : "wide";
+        
+        ROS_INFO("BOX detected: [%.3f x %.3f x %.3f] → %s",
+                length, width, height, wide_or_tall.c_str());
+      }
+      else
+      {
+        ROS_WARN("Unknown primitive type: %d", prim.type);
+        wide_or_tall = "tall";
+      }
+      
+      ROS_INFO("Using object from planning scene (%s)", wide_or_tall.c_str());
     }
     else
     {
@@ -283,81 +317,125 @@ public:
   
   bool pickAndLift(const geometry_msgs::PoseStamped& object_pose, const std::string& frame_id, const std::string& wide_or_tall)
   {
-    // 1. Select appropriate initial pose for object gripping
-    ROS_INFO("Selecting opening position...");
-    std::string initial_state;
-    if (wide_or_tall=="wide"){
-      initial_state = front_grip_state_name_;
-    }else{
-      initial_state = top_grip_state_name_;
-    }
+    ROS_INFO(">>> pickAndLift START");
+    ROS_INFO("Object at: [%.3f, %.3f, %.3f] in frame '%s'",
+            object_pose.pose.position.x,
+            object_pose.pose.position.y,
+            object_pose.pose.position.z,
+            frame_id.c_str());
+    
+    // 1. Select appropriate initial pose
+    ROS_INFO(">>> STEP 1: Selecting opening position (%s object)...", wide_or_tall.c_str());
+    std::string initial_state = (wide_or_tall == "wide") ? front_grip_state_name_ : top_grip_state_name_;
+    ROS_INFO("Chosen state: %s", initial_state.c_str());
+    
     if (!returnToZero(initial_state)){
-      ROS_WARN("Failed to move to opening position! Trying to plan with the current pose...");
+      ROS_WARN("Failed to move to opening position! Trying to plan with current pose...");
+    } else {
+      ROS_INFO("Moved to opening position");
     }
     
     // 2. Open gripper
-    ROS_INFO("Opening gripper...");
+    ROS_INFO(">>> STEP 2: Opening gripper...");
     if (!openGripper())
     {
       ROS_ERROR("Failed to open gripper");
       return false;
     }
-    // 3. Calculate grasp pose (approach from side)
+    ROS_INFO("Gripper opened");
+    
+    // 3. Calculate grasp pose
+    ROS_INFO(">>> STEP 3: Calculating grasp pose...");
     geometry_msgs::PoseStamped grasp_pose = object_pose;
-    grasp_pose.pose.position.x -= 0.08;  // 8cm back from object
-    grasp_pose.pose.orientation = tf2::toMsg(tf2::Quaternion(0, M_PI/2, 0));
-    // 4. Move to grasp pose
-    ROS_INFO("Moving to grasp pose...");
-    arm_group_->setPoseReferenceFrame(frame_id);
-    arm_group_->setPoseTarget(grasp_pose);
-    moveit::planning_interface::MoveGroupInterface::Plan plan;
-    auto result = arm_group_->plan(plan);
-    if (result != moveit::core::MoveItErrorCode::SUCCESS)
+    
+    // IMPORTANT: Check if object pose is valid
+    if (object_pose.pose.position.x == 0 && 
+        object_pose.pose.position.y == 0 && 
+        object_pose.pose.position.z == 0)
     {
-      ROS_ERROR("Failed to plan to grasp pose");
+      ROS_ERROR("Object pose is at origin (0,0,0)! Cannot grasp.");
       return false;
     }
+    
+    grasp_pose.pose.position.x -= 0.08;  // 8cm back from object
+    grasp_pose.pose.orientation = tf2::toMsg(tf2::Quaternion(0, M_PI/2, 0));
+    
+    ROS_INFO("Grasp pose: [%.3f, %.3f, %.3f]",
+            grasp_pose.pose.position.x,
+            grasp_pose.pose.position.y,
+            grasp_pose.pose.position.z);
+    
+    // 4. Move to grasp pose
+    ROS_INFO(">>> STEP 4: Planning to grasp pose...");
+    arm_group_->setPoseReferenceFrame(frame_id);
+    arm_group_->setPoseTarget(grasp_pose);
+    
+    moveit::planning_interface::MoveGroupInterface::Plan plan;
+    auto result = arm_group_->plan(plan);
+    
+    if (result != moveit::core::MoveItErrorCode::SUCCESS)
+    {
+      ROS_ERROR("Failed to plan to grasp pose (error: %d)", result.val);
+      return false;
+    }
+    ROS_INFO("Plan found, executing...");
+    
     if (arm_group_->execute(plan) != moveit::core::MoveItErrorCode::SUCCESS)
     {
       ROS_ERROR("Failed to execute grasp motion");
       return false;
     }
+    ROS_INFO("Reached grasp pose");
+    
     // 5. Close gripper
-    ros::Duration(0.5).sleep();  // Brief pause
-    ROS_INFO("Closing gripper...");
+    ROS_INFO(">>> STEP 5: Closing gripper...");
+    ros::Duration(0.5).sleep();
     if (!closeGripper())
     {
       ROS_ERROR("Failed to close gripper");
       return false;
     }
-    // 6. Attach object to gripper
-    ROS_INFO("Attaching object...");
+    ROS_INFO("Gripper closed");
+    
+    // 6. Attach object
+    ROS_INFO(">>> STEP 6: Attaching object...");
     auto objects = planning_scene_interface_->getObjects({object_name_});
     if (!objects.empty())
     {
       const auto& obj = objects.begin()->second;
       moveit_msgs::AttachedCollisionObject aco;
-      aco.link_name = "joint6_flange";  // Adjust to your gripper link
+      aco.link_name = "joint6_flange";
       aco.object = obj;
       aco.object.operation = aco.object.ADD;
       planning_scene_interface_->applyAttachedCollisionObject(aco);
+      ROS_INFO("Object attached");
+    } else {
+      ROS_WARN("Object not found in scene, skipping attachment");
     }
+    
     // 7. Lift object
-    ROS_INFO("Lifting object...");
+    ROS_INFO(">>> STEP 7: Lifting object...");
     geometry_msgs::PoseStamped lift_pose = grasp_pose;
-    lift_pose.pose.position.z += 0.15;  // Lift 15cm
+    lift_pose.pose.position.z += 0.15;
+    
     arm_group_->setPoseTarget(lift_pose);
     if (!arm_group_->move())
     {
       ROS_ERROR("Failed to lift object");
       return false;
     }
-    // 8. Return to initial/home pose
-    ROS_INFO("Returning to home position...");
+    ROS_INFO("Object lifted");
+    
+    // 8. Return to home
+    ROS_INFO(">>> STEP 8: Returning to home...");
     if (!returnToZero(zero_state_name_))
     {
       ROS_WARN("Failed to return to home, but object is picked");
+    } else {
+      ROS_INFO("Returned to home");
     }
+    
+    ROS_INFO(">>> pickAndLift COMPLETE");
     return true;
   }
   
@@ -400,24 +478,60 @@ public:
   
   bool returnToZero(const std::string state_name)
   {
-    // Try to use named state first
     std::vector<std::string> named_targets = arm_group_->getNamedTargets();
     
     if (std::find(named_targets.begin(), named_targets.end(), state_name) != named_targets.end())
     {
-      ROS_INFO("Using named state: %s", state_name.c_str());
+      ROS_INFO(">>> Using named state: %s", state_name.c_str());
       arm_group_->setNamedTarget(state_name);
-      return bool(arm_group_->move());
+      
+      // CHANGED: Plan first, then execute with error checking
+      moveit::planning_interface::MoveGroupInterface::Plan plan;
+      auto result = arm_group_->plan(plan);
+      
+      if (result != moveit::core::MoveItErrorCode::SUCCESS)
+      {
+        ROS_ERROR(">>> Failed to plan to state '%s' (error: %d)", state_name.c_str(), result.val);
+        return false;
+      }
+      
+      ROS_INFO(">>> Plan found, executing...");
+      result = arm_group_->execute(plan);
+      
+      if (result != moveit::core::MoveItErrorCode::SUCCESS)
+      {
+        ROS_ERROR(">>> Failed to execute to state '%s' (error: %d)", state_name.c_str(), result.val);
+        return false;
+      }
+      
+      ROS_INFO(">>> ✓ Reached state '%s'", state_name.c_str());
+      return true;
     }
     else if (has_initial_pose_)
     {
-      ROS_INFO("Using stored initial pose");
+      ROS_INFO(">>> Using stored initial pose");
       arm_group_->setPoseTarget(initial_pose_);
-      return bool(arm_group_->move());
+      
+      moveit::planning_interface::MoveGroupInterface::Plan plan;
+      auto result = arm_group_->plan(plan);
+      
+      if (result != moveit::core::MoveItErrorCode::SUCCESS)
+      {
+        ROS_ERROR(">>> Failed to plan to initial pose");
+        return false;
+      }
+      
+      result = arm_group_->execute(plan);
+      return (result == moveit::core::MoveItErrorCode::SUCCESS);
     }
     else
     {
-      ROS_WARN("No home state or initial pose available");
+      ROS_WARN(">>> No state '%s' or initial pose available", state_name.c_str());
+      ROS_INFO(">>> Available states:");
+      for (const auto& target : named_targets)
+      {
+        ROS_INFO(">>>   - %s", target.c_str());
+      }
       return false;
     }
   }
