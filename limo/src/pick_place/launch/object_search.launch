@@ -60,6 +60,7 @@
         <param name="gui"             value="true"/>
         <param name="subscribe_depth" value="true"/>
 		<param name="approx_sync" value="false" type="bool"/>
+        <param name="object_prefix" value="object" type="str"/>
 
         <!-- Path to object images -->
         <param name="objects_path" value="$(find pick_place)/objects/Can"/>
@@ -74,6 +75,8 @@
     </node>
     <node name="object_extractor" pkg="pick_place" type="object_extractor.py" output="screen">
 		<param name="object_prefix" value="object" type="str"/>
+        <param name="target_frame_id" value="depth_link"/>
+        <remap from="/camera/color/camera_info" to="/limo/color/camera_info" />
 	</node>
 
     <!--  **************** Visualisation ****************  -->
