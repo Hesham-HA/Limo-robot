@@ -3,8 +3,10 @@ Panels:
     Help Height: 0
     Name: Displays
     Property Tree Widget:
-      Expanded: ~
-      Splitter Ratio: 0.5
+      Expanded:
+        - /DepthCloud1/Auto Size1
+        - /DepthCloud1/Occlusion Compensation1
+      Splitter Ratio: 0.501006007194519
     Tree Height: 181
   - Class: rviz/Help
     Name: Help
@@ -310,12 +312,15 @@ Visualization Manager:
             Show Axes: false
             Show Trail: false
             Value: true
-        Robot Alpha: 0.5
+        Robot Alpha: 0.8999999761581421
         Show Robot Collision: false
-        Show Robot Visual: false
+        Show Robot Visual: true
       Value: true
       Velocity_Scaling_Factor: 0.1
     - Alpha: 1
+      Auto Size:
+        Auto Size Factor: 1
+        Value: true
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds:
         Max Value: 10
@@ -323,23 +328,28 @@ Visualization Manager:
         Value: true
       Axis: Z
       Channel Name: intensity
-      Class: rviz/PointCloud2
+      Class: rviz/DepthCloud
       Color: 255; 255; 255
+      Color Image Topic: /limo/color/image_raw
       Color Transformer: RGB8
+      Color Transport Hint: raw
       Decay Time: 0
+      Depth Map Topic: /limo/depth/image_raw
+      Depth Map Transport Hint: raw
       Enabled: true
       Invert Rainbow: false
       Max Color: 255; 255; 255
       Min Color: 0; 0; 0
-      Name: PointCloud2
+      Name: DepthCloud
+      Occlusion Compensation:
+        Occlusion Time-Out: 30
+        Value: false
       Position Transformer: XYZ
-      Queue Size: 10
+      Queue Size: 5
       Selectable: true
       Size (Pixels): 3
-      Size (m): 0.009999999776482582
-      Style: Flat Squares
-      Topic: /limo/depth/points
-      Unreliable: false
+      Style: Points
+      Topic Filter: true
       Use Fixed Frame: true
       Use rainbow: true
       Value: true
@@ -347,7 +357,7 @@ Visualization Manager:
   Global Options:
     Background Color: 48; 48; 48
     Default Light: true
-    Fixed Frame: odom
+    Fixed Frame: map
     Frame Rate: 30
   Name: root
   Tools:
@@ -359,7 +369,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 3.076871156692505
+      Distance: 1.8841043710708618
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -367,17 +377,17 @@ Visualization Manager:
         Value: false
       Field of View: 0.75
       Focal Point:
-        X: 0.24470317363739014
-        Y: 0.43665045499801636
-        Z: 0.2358703762292862
+        X: 0.3052363693714142
+        Y: 0.325813889503479
+        Z: 0.11440952867269516
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.33999964594841003
+      Pitch: 0.48979678750038147
       Target Frame: base_footprint
-      Yaw: 5.25493049621582
+      Yaw: 4.879937171936035
     Saved: ~
 Window Geometry:
   Displays:
@@ -395,5 +405,5 @@ Window Geometry:
   Views:
     collapsed: false
   Width: 1304
-  X: 172
-  Y: 62
+  X: 62
+  Y: 27
