@@ -1,18 +1,19 @@
 <launch>
+  <param name="use_sim_time" value="true"/>
   <arg name="use_rviz" default="true" />
   <!-- specify the planning pipeline -->
   <arg name="pipeline" default="ompl" doc="Planning pipeline to use with MoveIt" />
   <!-- By default, we are not in debug mode -->
   <arg name="debug" default="false" />
   <!-- Choose controller manager: simple, or ros_control -->
-  <arg name="moveit_controller_manager" default="simple" />
+  <arg name="moveit_controller_manager" default="ros_control" />
   <!-- Set execution mode for fake execution controllers -->
   <arg name="fake_execution_type" default="interpolate" />
 
   <!-- Run the main MoveIt executable without trajectory execution (we do not have controllers configured by default) -->
   <include file="$(find limo_cobot_moveit)/launch/move_group.launch">
     <arg name="allow_trajectory_execution" value="true"/>
-    <arg name="moveit_controller_manager" value="ros_control"/>
+    <arg name="moveit_controller_manager" value="$(arg moveit_controller_manager)"/>
     <arg name="fake_execution_type" value="$(arg fake_execution_type)"/>
     <arg name="info" value="true"/>
     <arg name="debug" value="$(arg debug)"/>

@@ -3,11 +3,11 @@
     <node name="find_object_3d" pkg="find_object_2d" type="find_object_2d" output="screen">
         <param name="gui"             value="true"/>
         <param name="subscribe_depth" value="true"/>
-		<param name="approx_sync" value="false" type="bool"/>
+		<param name="approx_sync" value="true" type="bool"/>
         <param name="object_prefix" value="object" type="str"/>
 
         <!-- Path to object images -->
-        <param name="objects_path" value="$(find pick_place)/objects/Can"/>
+        <param name="objects_path" value="$(find pick_place)/objects/Box"/>
         <param name="settings_path" value="$(find pick_place)/config/find_object.ini"/>
 
         <!-- Camera topics -->
