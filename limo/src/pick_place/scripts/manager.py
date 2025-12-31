@@ -1,113 +1,139 @@
 #!/usr/bin/env python3
 import rospy
+from geometry_msgs.msg import PoseStamped
+from std_srvs.srv import Empty
+from actionlib_msgs.msg import GoalID
+import math
 
 class PickPlaceManager:
-    """
-        Manages the pick and place operations for the robot in a fully-autonomous mission.
-        This node coordinates search, navigation, object detection, grasp planning and execution.
-        To fully run the pick and place mission, launch this node along with the necessary
-        supporting nodes such as object detection, navigation, and manipulation.
-            >> roslaunch pick_place gazebo.launch # Unless in real-world mode
-            >> roslaunch pick_place object_search.launch # For object detection and search
-            >> roslaunch pick_place moveit.launch # For manipulation
-            >> roslaunch pick_place object_grip.launch # For object gripping and placement
-        All the above nodes can be launched together with this node using the mission launch file:
-            >> roslaunch pick_place mission.launch # This node to manage the overall mission
-    """
-    
-    def __init__(self):
-        # TODO: Define any useful attributes here
-        self.exploare_active = True
-        self.object_location = None
-        
-        # TODO: Define subscribers, publishers, and service clients here
-        # e.g., self.object_detection_sub = rospy.Subscriber(...)
-        
-        # Initialize the ROS node
-        rospy.init_node('pick_place_manager')
-        rospy.loginfo("Pick and Place Manager Node Initialized")
-    
-    # TODO: Step 1: Wait for search results
-    def search_for_objects(self):
-        rospy.loginfo("Searching for objects...")
-        # Implement search logic here
-        # TODO: subscribe to the object detection results from the object search (object_extractor.py)
-        #
-        # TODO: once an object is detected, store its location, break the object search and proceed to navigation
-        # You should run a service or something to stop the explore_lite node
-        # You should also somehow stop the SLAM of rtabmap (or pause it if possible)
-        self.exploare_active = False
-        pass
-    
-    # TODO: Step 2: Navigate to object
-    def navigate_to_object(self, object_location):
-        rospy.loginfo(f"Navigating to object at {object_location}...")
-        # Implement navigation logic here
-        # TODO: the robot should be at an optimal distance for both manipulation and perception (roughly: 0.35 meters)
-        #
-        # TODO: use move_base, publish goals to /move_base_simple/goal
-        pass
-    
-    # TODO: Step 3: Pick the object
-    def pick_object(self):
-        rospy.loginfo("Picking up the object...")
-        # Implement pick logic here
-        # TODO: run the add object service to add the detected object to the planning scene (i.e rosservice call /add_object_to_scene "is_table: false")
-        #
-        # TODO: run the pick service to pick the object (i.e rosservice call /pick_object)
-        pass
-    
-    # TODO: Step 4: Search for the drop-off table
-    def navigate_to_dropoff(self):
-        rospy.loginfo("Searching for the drop-off zone/table...")
-        # Implement navigation logic here
-        self.exploare_active = True
-        # TODO: run the explore_lite node again to search for the drop-off table, resume SLAM if it was paused and reset its map
-        # 
-        # TODO: once the table is detected, store its location, break the table search and proceed to navigation
-        self.exploare_active = False
-        pass
-    
-    # TODO: Step 5: Navigate to drop-off table
-    def navigate_to_table(self, table_location):
-        rospy.loginfo(f"Apporaching the drop-off table at {table_location}...")
-        # Implement navigation logic here
-        # TODO: the robot should be at an optimal distance for both manipulation and perception (roughly: 0.35 meters)
-        #
-        # TODO: use move_base, publish goals to /move_base_simple/goal
-        pass
-    
-    # TODO: Step 6: Place the object
-    def place_object(self):
-        rospy.loginfo("Placing the object in its designated location...")
-        # Implement place logic here
-        # TODO: run the place service to place the object (i.e rosservice call /place_object)
-        pass
 
-    # A callback when the full mission is triggered
-    def execute_mission(self):
-        # High-level method to execute the full pick and place mission
-        if not self.exploare_active:
-            rospy.logwarn("Exploration is not active. A new exploration is triggered!")
-            # TODO: run the explore_lite node again to search for objects
-            self.exploare_active = True
-        self.search_for_objects()
-        if self.object_location:
-            self.navigate_to_object(self.object_location)
-            self.pick_object()
-            self.navigate_to_dropoff()
-            if self.object_location:  # Assuming we reuse object_location for table location
-                self.navigate_to_table(self.object_location)
-                self.place_object()
-    
+    def __init__(self):
+        rospy.init_node("pick_place_manager")
+
+        # -------------------
+        # State
+        # -------------------
+        self.explore_active = True
+        self.object_detected = False
+        self.object_pose = None
+
+        # -------------------
+        # Subscribers
+        # -------------------
+        self.obj_sub = rospy.Subscriber(
+            "/detected_object_pose",
+            PoseStamped,
+            self.object_callback
+        )
+
+        # -------------------
+        # Publishers
+        # -------------------
+        self.goal_pub = rospy.Publisher(
+            "/move_base_simple/goal",
+            PoseStamped,
+            queue_size=1
+        )
+
+        self.cancel_pub = rospy.Publisher(
+            "/move_base/cancel",
+            GoalID,
+            queue_size=1
+        )
+
+        # -------------------
+        # Services (RTAB-Map)
+        # -------------------
+        rospy.wait_for_service("/rtabmap/pause")
+        rospy.wait_for_service("/rtabmap/resume")
+
+        self.pause_rtabmap = rospy.ServiceProxy("/rtabmap/pause", Empty)
+        self.resume_rtabmap = rospy.ServiceProxy("/rtabmap/resume", Empty)
+
+        rospy.loginfo("Pick & Place Manager ready")
+
+    # ==========================================
+    # HARD STOP: stop exploration + pause RTAB-Map
+    # ==========================================
+    def hard_stop(self):
+        rospy.loginfo("HARD STOP: Stopping exploration & pausing RTAB-Map")
+
+        # 1) Cancel all active move_base goals
+        self.cancel_pub.publish(GoalID())
+
+        # 2) Pause RTAB-Map
+        try:
+            self.pause_rtabmap()
+        except rospy.ServiceException as e:
+            rospy.logwarn(f"RTAB-Map pause failed: {e}")
+
+        self.explore_active = False
+
+    # ==========================================
+    # Object detection callback
+    # ==========================================
+    def object_callback(self, msg):
+        if self.object_detected:
+            return
+
+        rospy.loginfo("Object detected → executing HARD STOP")
+        self.hard_stop()
+
+        # Save object pose
+        self.object_pose = msg
+        self.object_detected = True
+
+        # Navigate to object
+        self.navigate_to_object()
+
+    # ==========================================
+    # Navigate to detected object with offset
+    # ==========================================
+    def navigate_to_object(self):
+        rospy.loginfo("Navigating to detected object...")
+
+        goal = PoseStamped()
+        goal.header.frame_id = "map"
+        goal.header.stamp = rospy.Time.now()
+
+        obj_x = self.object_pose.pose.position.x
+        obj_y = self.object_pose.pose.position.y
+
+        dx = obj_x
+        dy = obj_y
+        distance = math.sqrt(dx*dx + dy*dy)
+
+        offset = 0.35
+        if distance > offset:
+            factor = (distance - offset) / distance
+            goal.pose.position.x = dx * factor
+            goal.pose.position.y = dy * factor
+        else:
+            goal.pose.position.x = dx
+            goal.pose.position.y = dy
+
+        goal.pose.position.z = 0.0
+        goal.pose.orientation = self.object_pose.pose.orientation
+
+        self.goal_pub.publish(goal)
+        rospy.loginfo("Navigation goal published (offset 0.35 m)")
+
+    # ==========================================
+    # Resume RTAB-Map (optional, call after pick)
+    # ==========================================
+    def resume_mapping(self):
+        rospy.loginfo("Resuming RTAB-Map...")
+        try:
+            self.resume_rtabmap()
+        except rospy.ServiceException as e:
+            rospy.logwarn(f"RTAB-Map resume failed: {e}")
+
+    # ==========================================
+    # Run ROS loop
+    # ==========================================
     def run(self):
-        # TODO: Create a ros service that triggers the full pick and place mission
-        rospy.loginfo("Pick and Place Manager is running...")
         rospy.spin()
 
-if __name__ == '__main__':
-    manager = PickPlaceManager()
-    try:
-        manager.run()
-    except rospy.ROSInterruptException:
-        pass
+
+if __name__ == "__main__":
+    PickPlaceManager().run()

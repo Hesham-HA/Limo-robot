@@ -9,6 +9,13 @@
 		<param name="frame_id" value="$(arg map_frame_id)"/>
 	</node>
 
+	<!--  **************** Pose estimation ****************  -->
+      <!--  <node pkg="robot_pose_ekf" name="robot_pose_ekf" type="robot_pose_ekf"> -->
+      <!--    <param name="output_frame" value="odom"/> -->
+      <!--    <param name="base_footprint_frame" value="base_link"/>  -->
+      <!--   <remap from="imu_data" to="imu"/>  -->
+      <!--  </node> -->
+
 	<!--  ************** Localization ***************  -->
 	<node pkg="amcl" type="amcl" name="amcl" output="screen">
 		<remap from="scan" to="/limo/scan"/>
@@ -22,11 +29,11 @@
     <!--  ************** Navigation ***************  -->
 	<node pkg="move_base" type="move_base" respawn="false" name="move_base" output="screen">
 		<remap from="scan" to="/limo/scan"/>
-  	  	<rosparam file="$(find pick_place)/param/costmap_common_params.yaml" command="load" ns="global_costmap"/>
-  	 	<rosparam file="$(find pick_place)/param/costmap_common_params.yaml" command="load" ns="local_costmap"/>
-  		<rosparam file="$(find pick_place)/param/local_costmap_params.yaml" command="load"/>
-  		<rosparam file="$(find pick_place)/param/global_costmap_params.yaml" command="load"/>
-  		<rosparam file="$(find pick_place)/param/planner.yaml" command="load"/>
+  	  	<rosparam file="$(find pick_place)/config/costmap_common.yaml" command="load" ns="global_costmap"/>
+  	 	<rosparam file="$(find pick_place)/config/costmap_common.yaml" command="load" ns="local_costmap"/>
+  		<rosparam file="$(find pick_place)/config/local_costmap.yaml" command="load"/>
+  		<rosparam file="$(find pick_place)/config/global_costmap.yaml" command="load"/>
+  		<rosparam file="$(find pick_place)/config/planner.yaml" command="load"/>
 		<param name="static_layer/map_topic" value="/map"/>
 		<param name="global_costmap/global_frame" value="$(arg map_frame_id)"/>
 		<param name="local_costmap/global_frame" value="$(arg map_frame_id)"/>
