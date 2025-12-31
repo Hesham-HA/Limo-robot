@@ -54,8 +54,8 @@ Visualization Manager:
     - Alpha: 1
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds:
-        Max Value: 6.580072402954102
-        Min Value: -1.1548112630844116
+        Max Value: 12.137124061584473
+        Min Value: 2.4898452758789062
         Value: true
       Axis: X
       Channel Name: intensity
@@ -85,7 +85,7 @@ Visualization Manager:
       Draw Behind: true
       Enabled: true
       Name: Map
-      Topic: /rtabmap/grid_prob_map
+      Topic: /rtabmap/grid_map
       Unreliable: false
       Use Timestamp: false
       Value: true
@@ -307,7 +307,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rtabmap_rviz_plugins/OrbitOriented
-      Distance: 12.946210861206055
+      Distance: 17.636253356933594
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -315,17 +315,17 @@ Visualization Manager:
         Value: false
       Field of View: 0.7853981852531433
       Focal Point:
-        X: 1.75735342502594
-        Y: 1.9257819652557373
-        Z: -2.4411206245422363
+        X: 0
+        Y: 0
+        Z: 0
       Focal Shape Fixed Size: false
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 1.030397891998291
+      Pitch: 0.7853981852531433
       Target Frame: base_link
-      Yaw: 4.030391693115234
+      Yaw: 0.7853981852531433
     Saved:
       - Class: rtabmap_rviz_plugins/OrbitOriented
         Distance: 17.623416900634766

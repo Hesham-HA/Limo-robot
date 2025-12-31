@@ -14,7 +14,7 @@
 
     <!--  **************** Passive Graph SLAM ****************  -->
     <group ns="rtabmap">
-        <node name="rtabmap" pkg="rtabmap_slam" type="rtabmap" output="screen" args="--><!--delete_db_on_start">
+        <node name="rtabmap" pkg="rtabmap_slam" type="rtabmap" output="screen" args="--delete_db_on_start">
             <param name="frame_id" type="string" value="base_footprint"/>
             <remap from="odom" to="/odom"/>
             <param name="subscribe_scan" type="bool" value="true"/>
@@ -28,7 +28,7 @@
             <param name="sync_queue_size" type="int" value="20"/>
             <param name="topic_queue_size" type="int" value="20"/>
             <remap from="grid_map" to="/rtabmap/grid_map"/>
-            <param name="Mem/IncrementalMemory" type="string" value="true"/-->
+            <param name="Mem/IncrementalMemory" type="string" value="true"/>
             <!-- Don't publish to the tf tree, use only for visual exploration -->
             <param name="publish_tf" type="bool" value="false"/>
         </node>
@@ -82,27 +82,39 @@
     
     <!--  **************** color-based Object Detection ****************  -->
     <node if="$(arg color_detection)" name="color_detection" pkg="pick_place" type="color_detection" output="screen">
+        <!-- Main settings -->
         <remap from="/camera/color/camera_info" to="/limo/color/camera_info"/>
         <remap from="/camera/color/image_raw" to="/limo/color/image_raw"/>
         <remap from="/camera/depth/image_raw" to="/limo/depth/image_raw"/>
         <param name="target_frame_id" value="depth_link"/>
         <param name="objects_path" value="$(find pick_place)/objects/colored"/>
+        <!-- Color extraction parameters -->
+        <param name="hsv_tolerance" value="15" type="int"/>  <!-- Hue tolerance in degrees (0-180) -->
+        <param name="saturation_min" value="40" type="int"/>  <!-- Minimum saturation (0-255) -->
+        <param name="value_min" value="40" type="int"/>       <!-- Minimum value/brightness (0-255) -->
+        <!-- Aspect ratio matching -->
+        <param name="aspect_ratio_tolerance" value="0.3" type="double"/>  <!-- 30% tolerance -->
+        <!-- Confidence scoring weights (must sum to ~1.0) -->
+        <param name="color_match_weight" value="0.35" type="double"/>        <!-- HSV color similarity -->
+        <param name="aspect_ratio_weight" value="0.30" type="double"/>       <!-- Shape similarity -->
+        <param name="area_weight" value="0.20" type="double"/>               <!-- Size preference -->
+        <param name="depth_quality_weight" value="0.15" type="double"/>      <!-- Depth reliability -->
+        <!-- Confidence score threshold -->
+        <param name="score_threshold" value="0.7" type="double"/> 
         <!-- Detection parameters -->
         <param name="min_contour_area" value="100" type="int"/>
         <param name="max_contour_area" value="50000" type="int"/>
-        <param name="min_aspect_ratio" value="0.3" type="double"/>
-        <param name="max_aspect_ratio" value="3.0" type="double"/>
         <!-- Image preprocessing -->
         <param name="blur_kernel_size" value="5" type="int"/>
         <param name="morph_kernel_size" value="3" type="int"/>
         <!-- Box size constraints (meters) -->
-        <param name="min_box_size" value="0.03" type="double"/>
+        <param name="min_box_size" value="0.02" type="double"/>
         <param name="max_box_size" value="0.5" type="double"/>
-        <!-- Color and AR matching parameters -->
-        <param name="hsv_tolerance" value="15"/>
-        <param name="saturation_min" value="40"/>
-        <param name="value_min" value="40"/>
-        <param name="aspect_ratio_tolerance" value="0.3"/>
+        <!-- Valid depth range and depth fallback for non-valid depth readings -->
+        <param name="min_depth" value="0.3" type="double"/>
+        <param name="max_depth" value="3.0" type="double"/>
+        <param name="use_fallback_depth" value="true" type="bool"/>
+        <param name="fallback_depth" value="0.3" type="double"/>
         <!-- Debug visualization -->
         <param name="show_debug_image" value="true" type="bool"/>
     </node>

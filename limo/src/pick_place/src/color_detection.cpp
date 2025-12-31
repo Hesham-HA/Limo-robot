@@ -2,7 +2,8 @@
  * @file dynamic_color_detector.cpp
  * @brief Color-based box detection with dynamic color ranges from reference images
  * 
- * Learns color ranges and aspect ratios from PNG reference images
+ * Learns color ranges and aspect ratios from PNG reference images.
+ * Uses confidence scoring to select best match per object template.
  */
 
 #include <ros/ros.h>
@@ -25,6 +26,7 @@
 #include <vector>
 #include <string>
 #include <map>
+#include <algorithm>
 #include <boost/filesystem.hpp>
 
 namespace fs = boost::filesystem;
@@ -34,10 +36,8 @@ class DynamicColorDetector
 public:
     DynamicColorDetector() : nh_("~"), it_(nh_)
     {
-        // Load parameters
         loadParameters();
         
-        // Load reference images and extract color ranges
         if (!loadReferenceImages())
         {
             ROS_ERROR("Failed to load reference images. Exiting.");
@@ -55,33 +55,27 @@ public:
         camera_info_sub_ = nh_.subscribe("/camera/color/camera_info", 1, 
                                          &DynamicColorDetector::cameraInfoCallback, this);
         
-        // Setup synchronized subscribers for RGB and Depth
+        // Setup synchronized subscribers
         rgb_sub_.subscribe(nh_, "/camera/color/image_raw", 1);
         depth_sub_.subscribe(nh_, "/camera/depth/image_raw", 1);
         
-        // Approximate time synchronization policy
         sync_.reset(new Sync(SyncPolicy(10), rgb_sub_, depth_sub_));
         sync_->registerCallback(boost::bind(&DynamicColorDetector::imageCallback, this, _1, _2));
         
-        ROS_INFO("Dynamic Color Detector initialized");
+        ROS_INFO("Dynamic Color Detector initialized with confidence scoring");
         ROS_INFO("Loaded %zu object templates", object_templates_.size());
     }
 
 private:
-    // ROS node handles
     ros::NodeHandle nh_;
     image_transport::ImageTransport it_;
     
-    // Publishers
     ros::Publisher marker_pub_;
     ros::Publisher pose_pub_;
     image_transport::Publisher debug_image_pub_;
     image_transport::Publisher mask_image_pub_;
-    
-    // Subscribers
     ros::Subscriber camera_info_sub_;
     
-    // Message filters
     message_filters::Subscriber<sensor_msgs::Image> rgb_sub_;
     message_filters::Subscriber<sensor_msgs::Image> depth_sub_;
     
@@ -101,32 +95,59 @@ private:
     bool show_debug_image_;
     int blur_kernel_size_;
     int morph_kernel_size_;
-    
-    // Box size estimation
     double min_box_size_;
     double max_box_size_;
+    double min_depth_;
+    double max_depth_;
     double fallback_depth_;
     bool use_fallback_depth_;
     
-    // Reference images path
+    // Scoring weights
+    double color_match_weight_;
+    double aspect_ratio_weight_;
+    double area_weight_;
+    double depth_quality_weight_;
+    double score_threshold_;
+    
     std::string objects_path_;
     int hsv_tolerance_;
     int saturation_min_;
     int value_min_;
     
-    // Object template structure
+    // Object template
     struct ObjectTemplate {
         std::string name;
         cv::Scalar hsv_lower;
         cv::Scalar hsv_upper;
-        cv::Scalar viz_color;  // BGR for visualization
+        cv::Scalar viz_color;
         double aspect_ratio;
         double aspect_ratio_min;
         double aspect_ratio_max;
+        double expected_hue;
         cv::Mat reference_image;
     };
     
     std::vector<ObjectTemplate> object_templates_;
+    
+    // Detection candidate with confidence score
+    struct DetectionCandidate {
+        int template_idx;
+        cv::Rect bbox;
+        cv::Point2f center;
+        double aspect_ratio;
+        float depth;
+        double confidence;
+        
+        // Individual score components
+        double color_score;
+        double aspect_ratio_score;
+        double area_score;
+        double depth_quality_score;
+        
+        // 3D information
+        double x, y, z;
+        double width, height, box_depth;
+    };
 
     void loadParameters()
     {
@@ -141,16 +162,23 @@ private:
         max_box_size_ = nh_.param(node_name + "/max_box_size", 1.0);
         blur_kernel_size_ = nh_.param(node_name + "/blur_kernel_size", 5);
         morph_kernel_size_ = nh_.param(node_name + "/morph_kernel_size", 3);
+        min_depth_ = nh_.param(node_name + "/min_depth", 0.3);
+        max_depth_ = nh_.param(node_name + "/max_depth", 3.0);
         fallback_depth_ = nh_.param(node_name + "/fallback_depth", 0.5);
         use_fallback_depth_ = nh_.param(node_name + "/use_fallback_depth", true);
         
-        // Reference images parameters
         objects_path_ = nh_.param(node_name + "/objects_path", std::string(""));
         hsv_tolerance_ = nh_.param(node_name + "/hsv_tolerance", 15);
         saturation_min_ = nh_.param(node_name + "/saturation_min", 40);
         value_min_ = nh_.param(node_name + "/value_min", 40);
         
-        // Initialize camera parameters
+        // Scoring weights (sum should be 1.0)
+        color_match_weight_ = nh_.param(node_name + "/color_match_weight", 0.35);
+        aspect_ratio_weight_ = nh_.param(node_name + "/aspect_ratio_weight", 0.30);
+        area_weight_ = nh_.param(node_name + "/area_weight", 0.20);
+        depth_quality_weight_ = nh_.param(node_name + "/depth_quality_weight", 0.15);
+        score_threshold_ = nh_.param(node_name + "/score_threshold", 0.5);
+        
         fx_ = fy_ = 554.0;
         cx_ = cy_ = 320.0;
         camera_info_received_ = false;
@@ -164,11 +192,9 @@ private:
             return false;
         }
         
-        // Expand path if it contains package reference
         std::string expanded_path = objects_path_;
         if (expanded_path.find("$(find") != std::string::npos)
         {
-            // Simple package path expansion
             size_t start = expanded_path.find("$(find ") + 7;
             size_t end = expanded_path.find(")", start);
             std::string pkg_name = expanded_path.substr(start, end - start);
@@ -180,13 +206,12 @@ private:
         
         if (!fs::exists(dir_path) || !fs::is_directory(dir_path))
         {
-            ROS_ERROR("Objects path does not exist or is not a directory: %s", expanded_path.c_str());
+            ROS_ERROR("Objects path does not exist: %s", expanded_path.c_str());
             return false;
         }
         
         ROS_INFO("Loading reference images from: %s", expanded_path.c_str());
         
-        // Iterate through PNG files in directory
         std::vector<fs::path> png_files;
         for (fs::directory_iterator it(dir_path); it != fs::directory_iterator(); ++it)
         {
@@ -207,7 +232,6 @@ private:
         
         ROS_INFO("Found %zu PNG reference images", png_files.size());
         
-        // Process each image
         for (const auto& png_path : png_files)
         {
             ObjectTemplate obj_template;
@@ -217,7 +241,7 @@ private:
                 ROS_INFO("  [%zu] %s: H=%.0f±%d, S>%d, V>%d, AR=%.2f±%.2f",
                          object_templates_.size(),
                          obj_template.name.c_str(),
-                         (obj_template.hsv_lower[0] + obj_template.hsv_upper[0]) / 2.0,
+                         obj_template.expected_hue,
                          hsv_tolerance_,
                          saturation_min_,
                          value_min_,
@@ -231,7 +255,6 @@ private:
 
     bool processReferenceImage(const std::string& image_path, ObjectTemplate& obj_template)
     {
-        // Load image
         cv::Mat img = cv::imread(image_path, cv::IMREAD_COLOR);
         if (img.empty())
         {
@@ -239,25 +262,20 @@ private:
             return false;
         }
         
-        // Extract object name from filename (without extension)
         fs::path p(image_path);
         obj_template.name = p.stem().string();
         obj_template.reference_image = img.clone();
         
-        // Calculate aspect ratio
         obj_template.aspect_ratio = static_cast<double>(img.cols) / img.rows;
         obj_template.aspect_ratio_min = obj_template.aspect_ratio * (1.0 - aspect_ratio_tolerance_);
         obj_template.aspect_ratio_max = obj_template.aspect_ratio * (1.0 + aspect_ratio_tolerance_);
         
-        // Convert to HSV
         cv::Mat hsv;
         cv::cvtColor(img, hsv, cv::COLOR_BGR2HSV);
         
-        // Calculate dominant color using histogram
         std::vector<cv::Mat> hsv_channels;
         cv::split(hsv, hsv_channels);
         
-        // Compute histogram for Hue channel (ignoring low saturation/value pixels)
         cv::Mat mask = (hsv_channels[1] > saturation_min_) & (hsv_channels[2] > value_min_);
         
         int hist_size = 180;
@@ -266,44 +284,25 @@ private:
         cv::Mat h_hist;
         cv::calcHist(&hsv_channels[0], 1, 0, mask, h_hist, 1, &hist_size, ranges, true, false);
         
-        // Find peak in histogram (dominant hue)
         double max_val;
         cv::Point max_loc;
         cv::minMaxLoc(h_hist, nullptr, &max_val, nullptr, &max_loc);
         
-        if (max_val < 10) // Not enough colored pixels
+        if (max_val < 10)
         {
             ROS_WARN("Image %s has insufficient color information", obj_template.name.c_str());
             return false;
         }
         
         int dominant_hue = max_loc.y;
+        obj_template.expected_hue = dominant_hue;
         
-        // Calculate mean saturation and value for colored pixels
-        cv::Scalar mean_sv = cv::mean(hsv, mask);
-        
-        // Define HSV range around dominant color
         int h_lower = std::max(0, dominant_hue - hsv_tolerance_);
         int h_upper = std::min(179, dominant_hue + hsv_tolerance_);
-        
-        // Handle hue wrap-around (red color wraps at 0/180)
-        if (dominant_hue < hsv_tolerance_)
-        {
-            // Red lower range (need two ranges but we'll use wider single range)
-            h_lower = 0;
-            h_upper = dominant_hue + hsv_tolerance_;
-        }
-        else if (dominant_hue > 180 - hsv_tolerance_)
-        {
-            // Red upper range
-            h_lower = dominant_hue - hsv_tolerance_;
-            h_upper = 179;
-        }
         
         obj_template.hsv_lower = cv::Scalar(h_lower, saturation_min_, value_min_);
         obj_template.hsv_upper = cv::Scalar(h_upper, 255, 255);
         
-        // Generate visualization color (use dominant color from image)
         cv::Mat dominant_color_hsv(1, 1, CV_8UC3, cv::Scalar(dominant_hue, 200, 200));
         cv::Mat dominant_color_bgr;
         cv::cvtColor(dominant_color_hsv, dominant_color_bgr, cv::COLOR_HSV2BGR);
@@ -331,16 +330,81 @@ private:
         }
     }
 
-    void imageCallback(const sensor_msgs::Image::ConstPtr& rgb_msg,
-                      const sensor_msgs::Image::ConstPtr& depth_msg)
+    double calculateConfidence(const DetectionCandidate& candidate, const ObjectTemplate& obj_template, const cv::Mat& hsv_roi)
     {
-        // Convert ROS images to OpenCV
+        double color_score = 0.0;
+        double aspect_ratio_score = 0.0;
+        double area_score = 0.0;
+        double depth_quality_score = 0.0;
+        
+        // 1. Color matching score (HSV histogram comparison)
+        std::vector<cv::Mat> hsv_channels;
+        cv::split(hsv_roi, hsv_channels);
+        
+        cv::Mat mask = (hsv_channels[1] > saturation_min_) & (hsv_channels[2] > value_min_);
+        
+        if (cv::countNonZero(mask) > 0)
+        {
+            cv::Scalar mean_hsv = cv::mean(hsv_roi, mask);
+            double hue_diff = std::abs(mean_hsv[0] - obj_template.expected_hue);
+            
+            // Handle hue wrap-around (red crosses 0/180 boundary)
+            if (hue_diff > 90)
+                hue_diff = 180 - hue_diff;
+            
+            // Score: 1.0 at perfect match, decreases linearly to 0 at tolerance boundary
+            color_score = std::max(0.0, 1.0 - (hue_diff / hsv_tolerance_));
+        }
+        
+        // 2. Aspect ratio matching score
+        double ar_diff = std::abs(candidate.aspect_ratio - obj_template.aspect_ratio);
+        double ar_tolerance_abs = obj_template.aspect_ratio * aspect_ratio_tolerance_;
+        aspect_ratio_score = std::max(0.0, 1.0 - (ar_diff / ar_tolerance_abs));
+        
+        // 3. Area confidence (prefer medium-sized detections)
+        double area = candidate.bbox.area();
+        double normalized_area = area / max_contour_area_;
+        
+        // Gaussian curve: best at 30% of max area, decreases towards min and max
+        double optimal_normalized_area = 0.3;
+        double area_variance = 0.2;
+        area_score = std::exp(-std::pow(normalized_area - optimal_normalized_area, 2) / (2 * area_variance * area_variance));
+        
+        // 4. Depth quality score
+        if (candidate.depth > min_depth_ && candidate.depth < max_depth_)
+        {
+            // Good depth: score based on how "reasonable" the depth is
+            // Prefer depths in working range (0.3m - 1.5m)
+            if (candidate.depth >= 0.3 && candidate.depth <= 1.5)
+                depth_quality_score = 1.0;
+            else if (candidate.depth < 0.3)
+                depth_quality_score = candidate.depth / 0.3;  // Closer = lower score
+            else
+                depth_quality_score = std::max(0.0, 1.0 - (candidate.depth - 1.5) / 3.5);
+        }
+        else
+        {
+            // Invalid or fallback depth
+            depth_quality_score = 0.3;  // Low but non-zero
+        }
+        
+        // Weighted combination
+        double total_confidence = 
+            color_score * color_match_weight_ +
+            aspect_ratio_score * aspect_ratio_weight_ +
+            area_score * area_weight_ +
+            depth_quality_score * depth_quality_weight_;
+        
+        return total_confidence;
+    }
+
+    void imageCallback(const sensor_msgs::Image::ConstPtr& rgb_msg, const sensor_msgs::Image::ConstPtr& depth_msg)
+    {
         cv_bridge::CvImagePtr cv_rgb, cv_depth;
         try
         {
             cv_rgb = cv_bridge::toCvCopy(rgb_msg, sensor_msgs::image_encodings::BGR8);
             
-            // Handle different depth encodings
             if (depth_msg->encoding == sensor_msgs::image_encodings::TYPE_16UC1 ||
                 depth_msg->encoding == "16UC1" || depth_msg->encoding == "mono16")
             {
@@ -380,49 +444,41 @@ private:
             return;
         }
 
-        // Apply Gaussian blur
         cv::Mat blurred;
         if (blur_kernel_size_ > 0)
             cv::GaussianBlur(cv_rgb->image, blurred, cv::Size(blur_kernel_size_, blur_kernel_size_), 0);
         else
             blurred = cv_rgb->image.clone();
 
-        // Convert to HSV
         cv::Mat hsv_image;
         cv::cvtColor(blurred, hsv_image, cv::COLOR_BGR2HSV);
 
-        // Debug visualization
         cv::Mat debug_image = cv_rgb->image.clone();
         cv::Mat combined_mask = cv::Mat::zeros(hsv_image.size(), CV_8UC1);
         
-        // Marker array
-        visualization_msgs::MarkerArray marker_array;
-        int marker_id = 0;
-        int total_detections = 0;
-
-        // Detect each object template
-        for (const auto& obj_template : object_templates_)
+        // Store all candidates for each template
+        std::map<int, std::vector<DetectionCandidate>> candidates_per_template;
+        
+        // Detect candidates for each object template
+        for (size_t template_idx = 0; template_idx < object_templates_.size(); ++template_idx)
         {
-            // Create mask for this color range
+            const auto& obj_template = object_templates_[template_idx];
+            
             cv::Mat mask;
             cv::inRange(hsv_image, obj_template.hsv_lower, obj_template.hsv_upper, mask);
             
-            // Morphological operations
             if (morph_kernel_size_ > 0)
             {
-                cv::Mat kernel = cv::getStructuringElement(cv::MORPH_RECT, 
-                    cv::Size(morph_kernel_size_, morph_kernel_size_));
+                cv::Mat kernel = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(morph_kernel_size_, morph_kernel_size_));
                 cv::morphologyEx(mask, mask, cv::MORPH_CLOSE, kernel);
                 cv::morphologyEx(mask, mask, cv::MORPH_OPEN, kernel);
             }
             
             cv::bitwise_or(combined_mask, mask, combined_mask);
             
-            // Find contours
             std::vector<std::vector<cv::Point>> contours;
             cv::findContours(mask, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
             
-            // Filter by area and aspect ratio
             for (const auto& contour : contours)
             {
                 double area = cv::contourArea(contour);
@@ -432,74 +488,126 @@ private:
                     cv::Rect bbox = cv::boundingRect(contour);
                     double aspect_ratio = static_cast<double>(bbox.width) / bbox.height;
                     
-                    // Check if aspect ratio matches template
                     if (aspect_ratio >= obj_template.aspect_ratio_min && 
                         aspect_ratio <= obj_template.aspect_ratio_max)
                     {
-                        cv::Point2f center(bbox.x + bbox.width/2.0f, bbox.y + bbox.height/2.0f);
-                        float depth = getMedianDepth(cv_depth->image, bbox);
+                        DetectionCandidate candidate;
+                        candidate.template_idx = template_idx;
+                        candidate.bbox = bbox;
+                        candidate.center = cv::Point2f(bbox.x + bbox.width/2.0f, bbox.y + bbox.height/2.0f);
+                        candidate.aspect_ratio = aspect_ratio;
+                        candidate.depth = getMedianDepth(cv_depth->image, bbox);
                         
                         // Handle invalid depth
-                        if (depth < 0.3 || depth > 3.0)
+                        if (candidate.depth < min_depth_ || candidate.depth > max_depth_)
                         {
                             if (use_fallback_depth_)
-                            {
-                                ROS_WARN_THROTTLE(2.0, "Using fallback depth for %s", 
-                                                 obj_template.name.c_str());
-                                depth = fallback_depth_;
-                            }
+                                candidate.depth = fallback_depth_;
                             else
                                 continue;
                         }
                         
-                        // Convert to 3D
-                        double x = (center.x - cx_) * depth / fx_;
-                        double y = (center.y - cy_) * depth / fy_;
-                        double z = depth;
+                        // Calculate 3D position
+                        candidate.x = (candidate.center.x - cx_) * candidate.depth / fx_;
+                        candidate.y = (candidate.center.y - cy_) * candidate.depth / fy_;
+                        candidate.z = candidate.depth;
                         
                         // Estimate dimensions
-                        double width = (bbox.width * depth) / fx_;
-                        double height = (bbox.height * depth) / fy_;
-                        double box_depth = std::min(width, height) * 0.8;
+                        candidate.width = (bbox.width * candidate.depth) / fx_;
+                        candidate.height = (bbox.height * candidate.depth) / fy_;
+                        candidate.box_depth = std::min(candidate.width, candidate.height) * 0.8;
                         
-                        width = std::max(min_box_size_, std::min(max_box_size_, width));
-                        height = std::max(min_box_size_, std::min(max_box_size_, height));
-                        box_depth = std::max(min_box_size_, std::min(max_box_size_, box_depth));
+                        candidate.width = std::max(min_box_size_, std::min(max_box_size_, candidate.width));
+                        candidate.height = std::max(min_box_size_, std::min(max_box_size_, candidate.height));
+                        candidate.box_depth = std::max(min_box_size_, std::min(max_box_size_, candidate.box_depth));
                         
-                        ROS_INFO("Detected '%s' at [%.3f, %.3f, %.3f]m, size [%.3f x %.3f x %.3f]m, AR=%.2f",
-                                 obj_template.name.c_str(), x, y, z, width, box_depth, height, aspect_ratio);
+                        // Extract HSV ROI for color scoring
+                        cv::Rect safe_bbox = bbox & cv::Rect(0, 0, hsv_image.cols, hsv_image.rows);
+                        cv::Mat hsv_roi = hsv_image(safe_bbox);
                         
-                        total_detections++;
+                        // Calculate confidence score
+                        candidate.confidence = calculateConfidence(candidate, obj_template, hsv_roi);
                         
-                        // Create markers
-                        marker_array.markers.push_back(createBoxMarker(
-                            marker_id++, rgb_msg->header, x, y, z, 
-                            width, box_depth, height, obj_template.viz_color));
-                        
-                        marker_array.markers.push_back(createTextMarker(
-                            marker_id++, rgb_msg->header, x, y, z + height/2 + 0.05, 
-                            obj_template.name));
-                        
-                        // Draw on debug image
-                        cv::rectangle(debug_image, bbox, obj_template.viz_color, 2);
-                        cv::putText(debug_image, obj_template.name, 
-                                   cv::Point(bbox.x, bbox.y - 10),
-                                   cv::FONT_HERSHEY_SIMPLEX, 0.6, obj_template.viz_color, 2);
-                        cv::circle(debug_image, center, 5, obj_template.viz_color, -1);
-                        
-                        std::stringstream ss;
-                        ss << std::fixed << std::setprecision(2) << z << "m AR:" << aspect_ratio;
-                        cv::putText(debug_image, ss.str(), 
-                                   cv::Point(bbox.x, bbox.y + bbox.height + 20),
-                                   cv::FONT_HERSHEY_SIMPLEX, 0.4, obj_template.viz_color, 1);
+                        candidates_per_template[template_idx].push_back(candidate);
                     }
                 }
             }
         }
+        
+        // Select best candidate for each template
+        std::vector<DetectionCandidate> best_detections;
+        
+        for (const auto& pair : candidates_per_template)
+        {
+            int template_idx = pair.first;
+            const auto& candidates = pair.second;
+            
+            if (candidates.empty())
+                continue;
+            
+            // Find candidate with highest confidence
+            auto best_it = std::max_element(candidates.begin(), candidates.end(),
+                [](const DetectionCandidate& a, const DetectionCandidate& b) {
+                    return a.confidence < b.confidence;
+                });
+            
+            ROS_INFO("Template '%s': %zu candidates, best confidence=%.3f",
+                     object_templates_[template_idx].name.c_str(),
+                     candidates.size(),
+                     best_it->confidence);
+            
+            if (best_it->confidence > score_threshold_) // accept only detection with confidence higher than threshold
+                best_detections.push_back(*best_it);
+        }
+        
+        // Publish results
+        visualization_msgs::MarkerArray marker_array;
+        int marker_id = 0;
+        
+        for (const auto& detection : best_detections)
+        {
+            const auto& obj_template = object_templates_[detection.template_idx];
+            
+            ROS_INFO("BEST MATCH '%s': pos=[%.3f, %.3f, %.3f]m, size=[%.3f x %.3f x %.3f]m, "
+                     "AR=%.2f, confidence=%.3f",
+                     obj_template.name.c_str(),
+                     detection.x, detection.y, detection.z,
+                     detection.width, detection.box_depth, detection.height,
+                     detection.aspect_ratio, detection.confidence);
+            
+            // Create markers
+            marker_array.markers.push_back(createBoxMarker(
+                marker_id++, rgb_msg->header, 
+                detection.x, detection.y, detection.z, 
+                detection.width, detection.box_depth, detection.height, 
+                obj_template.viz_color));
+            
+            marker_array.markers.push_back(createTextMarker(
+                marker_id++, rgb_msg->header, 
+                detection.x, detection.y, detection.z + detection.height/2 + 0.05, 
+                obj_template.name, detection.confidence));
+            
+            // Draw on debug image
+            cv::rectangle(debug_image, detection.bbox, obj_template.viz_color, 3);
+            
+            std::stringstream label;
+            label << obj_template.name << " (" << std::fixed << std::setprecision(2) 
+                  << (detection.confidence * 100) << "%)";
+            cv::putText(debug_image, label.str(), 
+                       cv::Point(detection.bbox.x, detection.bbox.y - 10),
+                       cv::FONT_HERSHEY_SIMPLEX, 0.6, obj_template.viz_color, 2);
+            
+            cv::circle(debug_image, detection.center, 5, obj_template.viz_color, -1);
+            
+            std::stringstream info;
+            info << std::fixed << std::setprecision(2) << detection.z << "m";
+            cv::putText(debug_image, info.str(), 
+                       cv::Point(detection.bbox.x, detection.bbox.y + detection.bbox.height + 20),
+                       cv::FONT_HERSHEY_SIMPLEX, 0.5, obj_template.viz_color, 2);
+        }
 
-        ROS_INFO_THROTTLE(1.0, "Frame detections: %d", total_detections);
+        ROS_INFO_THROTTLE(1.0, "Frame: %zu unique objects detected", best_detections.size());
 
-        // Publish
         if (!marker_array.markers.empty())
             marker_pub_.publish(marker_array);
 
@@ -540,7 +648,6 @@ private:
         
         if (valid_depths.empty())
         {
-            // Try expanded ROI
             int expand = std::max(10, std::max(roi.width, roi.height) / 2);
             cv::Rect expanded(
                 std::max(0, roi.x - expand),
@@ -598,9 +705,7 @@ private:
         return marker;
     }
 
-    visualization_msgs::Marker createTextMarker(int id, const std_msgs::Header& header,
-                                                double x, double y, double z,
-                                                const std::string& text)
+    visualization_msgs::Marker createTextMarker(int id, const std_msgs::Header& header, double x, double y, double z, const std::string& text, double confidence)
     {
         visualization_msgs::Marker marker;
         marker.header = header;
@@ -615,7 +720,9 @@ private:
         marker.pose.position.z = z;
         marker.pose.orientation.w = 1.0;
         
-        marker.text = text;
+        std::stringstream ss;
+        ss << text << "\n" << std::fixed << std::setprecision(0) << (confidence * 100) << "%";
+        marker.text = ss.str();
         marker.scale.z = 0.05;
         
         marker.color.r = 1.0;
