@@ -3,6 +3,7 @@
     <arg name="use_rviz" default="true"/>
     <arg name="map_file" default="$(find pick_place)/maps/office_map.yaml"/>
     <arg name="map_frame_id" default="map"/>
+    <arg name="color_detection" default="true"/>
 
     <!--  ************** Navigation ***************  -->
     <include file="$(dirname)/navigation.launch">
@@ -12,7 +13,7 @@
     </include>
 
     <!--  **************** Passive Graph SLAM ****************  -->
-    <!-- <group ns="rtabmap">
+    <group ns="rtabmap">
         <node name="rtabmap" pkg="rtabmap_slam" type="rtabmap" output="screen" args="--><!--delete_db_on_start">
             <param name="frame_id" type="string" value="base_footprint"/>
             <remap from="odom" to="/odom"/>
@@ -29,16 +30,16 @@
             <remap from="grid_map" to="/rtabmap/grid_map"/>
             <param name="Mem/IncrementalMemory" type="string" value="true"/-->
             <!-- Don't publish to the tf tree, use only for visual exploration -->
-            <!-- <param name="publish_tf" type="bool" value="false"/>
-        </node> -->
+            <param name="publish_tf" type="bool" value="false"/>
+        </node>
         <!-- For visualization of detected objects -->
-        <!-- <node name="save_objects_example" pkg="rtabmap_demos" type="save_objects_example" output="screen">
+        <node name="save_objects_example" pkg="rtabmap_demos" type="save_objects_example" output="screen">
             <param name="frame_id" value="base_footprint"/>
         </node>
-    </group> -->
+    </group>
 
     <!--  ************** exploration ***************  -->
-	<!-- <node pkg="explore_lite" type="explore" respawn="false" name="explore" output="screen">
+	<node pkg="explore_lite" type="explore" respawn="false" name="explore" output="screen">
 		<param name="robot_base_frame" value="base_link"/>
 		<param name="costmap_topic" value="/rtabmap/grid_map"/>
 		<param name="costmap_updates_topic" value="/map_updates"/>
@@ -50,35 +51,37 @@
 		<param name="gain_scale" value="1.0"/>
 		<param name="transform_tolerance" value="0.3"/>
 		<param name="min_frontier_size" value="0.75"/>
-	</node> -->
+	</node>
 
     <!-- Use simulation time -->
     <param name="use_sim_time" value="true"/>
 
-    <!--  **************** Object Detection (2 nodes) ****************  -->
-    <!-- <node name="find_object_3d" pkg="find_object_2d" type="find_object_2d" output="screen">
+    <!--  **************** feature-based Object Detection ****************  -->
+    <node unless="$(arg color_detection)" name="find_object_3d" pkg="find_object_2d" type="find_object_2d" output="screen">
         <param name="gui"             value="true"/>
         <param name="subscribe_depth" value="true"/>
 		<param name="approx_sync" value="false" type="bool"/>
-        <param name="object_prefix" value="object" type="str"/> -->
+        <param name="object_prefix" value="object" type="str"/>
 
         <!-- Path to object images -->
-        <!-- <param name="objects_path" value="$(find pick_place)/objects/Can"/>
-        <param name="settings_path" value="$(find pick_place)/config/find_object.ini"/> -->
+        <param name="objects_path" value="$(find pick_place)/objects/Can"/>
+        <param name="settings_path" value="$(find pick_place)/config/find_object.ini"/>
 
         <!-- Camera topics -->
-        <!-- <remap from="rgb/image_rect_color" to="/limo/color/image_raw"/>
+        <remap from="rgb/image_rect_color" to="/limo/color/image_raw"/>
         <remap from="depth_registered/image_raw" to="/limo/depth/image_raw"/>
         <remap from="depth_registered/camera_info" to="/limo/depth/camera_info"/>
         <param name="rgb/image_transport" value="compressed"/>
         <param name="depth_registered/image_transport" value="raw"/>
     </node>
-    <node name="object_extractor" pkg="pick_place" type="object_extractor.py" output="screen">
+    <node unless="$(arg color_detection)" name="object_extractor" pkg="pick_place" type="object_extractor.py" output="screen">
 		<param name="object_prefix" value="object" type="str"/>
         <param name="target_frame_id" value="depth_link"/>
         <remap from="/camera/color/camera_info" to="/limo/color/camera_info" />
-	</node> -->
-    <node name="color_detection" pkg="pick_place" type="color_detection" output="screen">
+	</node>
+    
+    <!--  **************** color-based Object Detection ****************  -->
+    <node if="$(arg color_detection)" name="color_detection" pkg="pick_place" type="color_detection" output="screen">
         <remap from="/camera/color/camera_info" to="/limo/color/camera_info"/>
         <remap from="/camera/color/image_raw" to="/limo/color/image_raw"/>
         <remap from="/camera/depth/image_raw" to="/limo/depth/image_raw"/>
