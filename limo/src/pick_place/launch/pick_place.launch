@@ -5,6 +5,7 @@
 
         <remap from="/camera/depth/points" to="/limo/depth/points" />
         <remap from="/object_bounding_boxes" to="/detection/object" />
+        <remap from="/gripper_control_command" to="/gripper_controller/command" />
 
         <param name="object_name" value="detected_object" />
         <param name="table_name" value="detected_table" />
@@ -16,14 +17,14 @@
         <param name="grasp_joint" value="grasping_frame_joint" />
         <param name="grasp_link" value="joint6_flange" />
         
-        <param name="use_perception" type="bool" value="true" />
-        <param name="bbox_scale_factor" value="0.8" />
+        <param name="use_perception" type="bool" value="false" />
+        <param name="bbox_scale_factor" value="0.95" />
 
         <!-- Defaults works well for these parameters -->
-        <!-- <param name="plane_distance_threshold" value="0.015" /> -->
-        <!-- <param name="cylinder_score_threshold" value="0.4" /> -->
-        <!-- <param name="plane_max_iterations" value="500" /> -->
-        <!-- <param name="plane_probability" value="0.95" /> -->
-        <!-- <param name="use_multiple_plane_removal" value="false" /> -->
+        <param name="plane_distance_threshold" value="0.015" />
+        <param name="cylinder_score_threshold" value="0.4" />
+        <param name="plane_max_iterations" value="500" />
+        <param name="plane_probability" value="0.95" />
+        <param name="use_multiple_plane_removal" value="false" />
     </node>
 </launch>

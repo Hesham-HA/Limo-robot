@@ -55,6 +55,9 @@ private:
   ros::Subscriber cloud_subscriber_;
   ros::Subscriber bbox_subscriber_;
   
+  // Publisher
+  ros::Publisher gripper_traj_pub_;
+
   // Service
   ros::ServiceServer add_object_service_;
   ros::ServiceServer pick_service_;

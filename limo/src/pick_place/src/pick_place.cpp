@@ -66,6 +66,9 @@ ObjectPickAndPlace::ObjectPickAndPlace()
   cloud_subscriber_ = nh_.subscribe("/camera/depth/points", 1, &ObjectPickAndPlace::cloudCB, this);
   bbox_subscriber_ = nh_.subscribe("/object_bounding_boxes", 1, &ObjectPickAndPlace::bboxCB, this);
   
+  // Publisher
+  gripper_traj_pub_ = nh_.advertise<trajectory_msgs::JointTrajectory>("gripper_control_command", 1);
+
   // Services
   add_object_service_ = nh_.advertiseService("add_object_to_scene", &ObjectPickAndPlace::addObjectService, this);
   pick_service_ = nh_.advertiseService("pick_object", &ObjectPickAndPlace::pickService, this);
@@ -806,38 +809,50 @@ bool ObjectPickAndPlace::addObjectToPlanningScene(const ObjectParams& params, co
   return true;
 }
 
-bool ObjectPickAndPlace::openGripper()
-{
-  ROS_INFO("Opening gripper...");
-  double opening_position = 0.00;
-  gripper_group_->setJointValueTarget(grasp_joint_name, opening_position);
-  bool success = bool(gripper_group_->move());
-  if (success)
-  {
-    ROS_INFO("Gripper opened successfully");
-  }
-  else
-  {
-    ROS_WARN("Failed to open gripper");
-  }  
-  return success;
+bool ObjectPickAndPlace::openGripper() {
+  ROS_INFO("Opening gripper (direct trajectory)...");
+
+  trajectory_msgs::JointTrajectory traj;
+  traj.joint_names.push_back(grasp_joint_name);  // same name you pass to MoveIt
+
+  trajectory_msgs::JointTrajectoryPoint pt;
+  pt.positions.push_back(0.0);                 // fully open
+  pt.velocities.push_back(0.0);
+  pt.accelerations.push_back(0.0);
+  pt.time_from_start = ros::Duration(0.5);     // 0.5 s to open
+
+  traj.points.push_back(pt);
+
+  // IMPORTANT: header.stamp should be in the future
+  traj.header.stamp = ros::Time::now() + ros::Duration(0.1);
+
+  gripper_traj_pub_.publish(traj);
+
+  ros::Duration(1.0).sleep();                  // wait for motion to finish
+  ROS_INFO("Gripper open command sent");
+  return true;
 }
 
-bool ObjectPickAndPlace::closeGripper()
-{
-  ROS_INFO("Closing gripper...");
-  double closing_position = -0.01;
-  gripper_group_->setJointValueTarget(grasp_joint_name, closing_position);
-  bool success = bool(gripper_group_->move());
-  if (success)
-  {
-    ROS_INFO("Gripper closed successfully");
-  }
-  else
-  {
-    ROS_WARN("Failed to close gripper");
-  }
-  return success;
+bool ObjectPickAndPlace::closeGripper() {
+  ROS_INFO("Closing gripper (direct trajectory)...");
+
+  trajectory_msgs::JointTrajectory traj;
+  traj.joint_names.push_back(grasp_joint_name);
+
+  trajectory_msgs::JointTrajectoryPoint pt;
+  pt.positions.push_back(-0.06);               // your closing angle
+  pt.velocities.push_back(0.0);
+  pt.accelerations.push_back(0.0);
+  pt.time_from_start = ros::Duration(2.0);     // 0.5 s to close
+
+  traj.points.push_back(pt);
+  traj.header.stamp = ros::Time::now() + ros::Duration(0.1);
+
+  gripper_traj_pub_.publish(traj);
+
+  ros::Duration(6.0).sleep();
+  ROS_INFO("Gripper close command sent");
+  return true;
 }
 
 bool ObjectPickAndPlace::pickAndLift(const geometry_msgs::PoseStamped& object_pose, const std::string& frame_id, const std::string& wide_or_tall)
@@ -892,9 +907,9 @@ bool ObjectPickAndPlace::pickAndLift(const geometry_msgs::PoseStamped& object_po
   }
   pre_grasp_pose.pose.orientation = tf2::toMsg(q);
   if (wide_or_tall == "tall") {
-    pre_grasp_pose.pose.position.x -= 0.1; // 6cm back from object
+    pre_grasp_pose.pose.position.x -= 0.1; // 10cm back from object
   } else {
-    pre_grasp_pose.pose.position.z += 0.06; // 6cm above object
+    pre_grasp_pose.pose.position.z += 0.08; // 8cm above object
   }
   ROS_INFO("Pre-grasp pose: [%.2f, %.2f, %.2f] (%.2f, %.2f, %.2f)",
     pre_grasp_pose.pose.position.x, pre_grasp_pose.pose.position.y, pre_grasp_pose.pose.position.z,
@@ -923,9 +938,9 @@ bool ObjectPickAndPlace::pickAndLift(const geometry_msgs::PoseStamped& object_po
   std::vector<geometry_msgs::Pose> waypoints;
   geometry_msgs::PoseStamped grasp_pose = pre_grasp_pose;
   if (wide_or_tall == "tall") {
-    grasp_pose.pose.position.x += 0.08; // Move forward into the object
+    grasp_pose.pose.position.x += 0.07; // Move forward into the object
   } else {
-    grasp_pose.pose.position.z -= 0.04; // Move down onto the object
+    grasp_pose.pose.position.z -= 0.05; // Move down onto the object
   }
   waypoints.push_back(grasp_pose.pose);
   moveit_msgs::RobotTrajectory trajectory;
@@ -957,15 +972,22 @@ bool ObjectPickAndPlace::pickAndLift(const geometry_msgs::PoseStamped& object_po
   if (!objects.empty())
   {
     moveit_msgs::AttachedCollisionObject aco;
-    aco.link_name = grasp_link_name;
+    aco.link_name = grasp_link_name;          // e.g. "joint6flange"
     aco.object.id = object_name_;
     aco.object.operation = moveit_msgs::CollisionObject::ADD;
+
+    // Allow the object to touch the gripper links
+    aco.touch_links.push_back("gripper_finger_link1");
+    aco.touch_links.push_back("gripper_finger_link2");
+    aco.touch_links.push_back(grasp_link_name);  // flange itself
+
     planning_scene_interface_->applyAttachedCollisionObject(aco);
-    ROS_INFO("Object attached");
+    ros::Duration(0.3).sleep();  // let planning scene update
+    ROS_INFO("Object attached with touch_links");
   }
   else
   {
-    ROS_WARN("Object not found in scene, skipping attachment");
+    ROS_WARN("Object not found in planning scene, skipping attachment");
   }
   
   ROS_INFO(">>> STEP 8: Lifting object...");
@@ -994,33 +1016,78 @@ bool ObjectPickAndPlace::pickAndLift(const geometry_msgs::PoseStamped& object_po
 
 bool ObjectPickAndPlace::placeAndRelease(const geometry_msgs::PoseStamped& place_pose)
 {
-  ROS_INFO("Moving to place pose...");
+  ROS_INFO(">>> placeAndRelease START");
   arm_group_->setPoseReferenceFrame(place_pose.header.frame_id);
-  arm_group_->setPoseTarget(place_pose);
+  arm_group_->setPlanningTime(20.0);
+  arm_group_->setNumPlanningAttempts(10);
+  arm_group_->setGoalJointTolerance(0.01);
+  arm_group_->setGoalPositionTolerance(0.01);
+  arm_group_->setGoalOrientationTolerance(0.02);
+  ROS_INFO(">>> STEP 1: Moving to pre-release position...");
+  geometry_msgs::PoseStamped pre_place_pose = place_pose;
+  pre_place_pose.pose.position.z += 0.1;
+  arm_group_->setPoseTarget(pre_place_pose);
   if (!arm_group_->move())
   {
-    ROS_ERROR("Failed to move to place pose");
+    ROS_ERROR("Failed to move to pre-release position");
     return false;
   }
-  ROS_INFO("Detaching object...");
-  std::vector<std::string> object_ids = {object_name_};
-  planning_scene_interface_->removeCollisionObjects(object_ids);
-  ROS_INFO("Opening gripper...");
+  ROS_INFO("Reached pre-release position");
+  ROS_INFO(">>> STEP 2: Planning downward descent trajectory...");
+  std::vector<geometry_msgs::Pose> waypoints;  
+  // Start from post-release location
+  geometry_msgs::Pose start_pose = pre_place_pose.pose;
+  waypoints.push_back(start_pose);
+  // Create intermediate waypoints on the way down (3 waypoints total)
+  for (int i = 1; i <= 2; ++i) {
+    geometry_msgs::Pose intermediate_pose = start_pose;
+    // Linear interpolation downward
+    intermediate_pose.position.z = pre_place_pose.pose.position.z - (0.10 * i / 2.0);  // 10 cm total descent
+    waypoints.push_back(intermediate_pose);
+  }
+  // Final waypoint at table surface
+  geometry_msgs::Pose final_pose = start_pose;
+  final_pose.position.z = place_pose.pose.position.z + 0.02;  // 2 cm above table surface
+  waypoints.push_back(final_pose);
+  // Compute Cartesian path
+  moveit_msgs::RobotTrajectory trajectory;
+  double fraction = arm_group_->computeCartesianPath(waypoints, 0.01, 0.0, trajectory, false);
+  if (fraction < 0.75) {
+    ROS_WARN("Cartesian path only %.1f%% complete, but proceeding with available trajectory", fraction * 100.0);
+  } else {
+    ROS_INFO("Full Cartesian descent trajectory computed");
+  }
+  ROS_INFO(">>> STEP 3: Executing downward descent...");
+  if (arm_group_->execute(trajectory) != moveit::core::MoveItErrorCode::SUCCESS) {
+    ROS_ERROR("Failed to execute descent trajectory");
+    return false;
+  }
+  ROS_INFO("Completed descent to table");
+  ROS_INFO(">>> STEP 4: Detaching object from gripper...");
+  moveit_msgs::AttachedCollisionObject aco;
+  aco.link_name = grasp_link_name;
+  aco.object.id = object_name_;
+  aco.object.operation = moveit_msgs::CollisionObject::REMOVE;
+  planning_scene_interface_->applyAttachedCollisionObject(aco);
+  ros::Duration(0.2).sleep();  // Let planning scene update
+  ROS_INFO("Object detached");
+  ROS_INFO(">>> STEP 5: Opening gripper...");
   if (!openGripper())
   {
     ROS_ERROR("Failed to open gripper");
     return false;
   }
-  ROS_INFO("Moving back...");
+  ROS_INFO(">>> STEP 6: Moving back to pre-place...");
   geometry_msgs::PoseStamped retreat_pose = place_pose;
   retreat_pose.pose.position.x -= 0.05;
   arm_group_->setPoseTarget(retreat_pose);
   arm_group_->move();
-  ROS_INFO("Returning to home position...");
+  ROS_INFO(">>> STEP 7: Returning to home position...");
   if (!returnToZero(zero_state_name_))
   {
     ROS_WARN("Failed to return to home, but object is placed");
   }
+  ROS_INFO(">>> placeAndRelease COMPLETE");
   return true;
 }
 

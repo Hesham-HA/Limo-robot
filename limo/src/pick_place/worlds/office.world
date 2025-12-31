@@ -5835,7 +5835,7 @@
       <pose>2.0 -0.1 0.295777 0 -0.042701 0</pose>
     </model>
     <model name='unit_box_1'>
-      <pose frame=''>0.6 0 0.075 0 0 0</pose>
+      <pose frame=''>0.6 0 0.06 0 0 0</pose>
       <link name='link'>
         <inertial>
           <mass>1</mass>
@@ -5851,7 +5851,7 @@
         <collision name='collision'>
           <geometry>
             <box>
-              <size>0.3 0.45 0.15</size>
+              <size>0.3 0.45 0.12</size>
             </box>
           </geometry>
           <surface>
@@ -5880,7 +5880,7 @@
           <pose frame=''>0 0 0 0 -0 0</pose>
           <geometry>
             <box>
-              <size>0.3 0.45 0.15</size>
+              <size>0.3 0.45 0.12</size>
             </box>
           </geometry>
           <material>
@@ -5905,7 +5905,7 @@
       </link>
     </model>
     <model name='unit_box_2'>
-      <pose frame=''>0.475 0.0 0.165 0 0 0</pose>
+      <pose frame=''>0.5 0.0 0.1325 0 0 0</pose>
       <link name='link'>
         <inertial>
           <mass>0.25</mass>
@@ -5921,7 +5921,7 @@
         <collision name='collision'>
           <geometry>
             <box>
-              <size>0.03 0.03 0.03</size>
+              <size>0.015 0.025 0.025</size>
             </box>
           </geometry>
           <surface>
@@ -5950,7 +5950,7 @@
           <pose frame=''>0 0 0 0 -0 0</pose>
           <geometry>
             <box>
-              <size>0.03 0.03 0.03</size>
+              <size>0.015 0.025 0.025</size>
             </box>
           </geometry>
           <material>
@@ -6030,7 +6030,7 @@
         <kinematic>0</kinematic>
       </link>
       <static>0</static>
-      <pose>0.5 -0.12 0.157 0 0.042701 0.7</pose>
+      <pose>0.5 -0.12 0.127 0 0.042701 0.7</pose>
     </model>
     <gui fullscreen='0'>
       <camera name='user_camera'>

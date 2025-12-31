@@ -1,13 +1,15 @@
 <?xml version="1.0"?>
 <launch>
-    <node name="find_object_3d" pkg="find_object_2d" type="find_object_2d" output="screen">
+    <arg name="color_detection" default="true"/>
+    
+    <node unless="$(arg color_detection)" name="find_object_3d" pkg="find_object_2d" type="find_object_2d" output="screen">
         <param name="gui"             value="true"/>
         <param name="subscribe_depth" value="true"/>
-		<param name="approx_sync" value="true" type="bool"/>
+		<param name="approx_sync" value="false" type="bool"/>
         <param name="object_prefix" value="object" type="str"/>
 
         <!-- Path to object images -->
-        <param name="objects_path" value="$(find pick_place)/objects/Box"/>
+        <param name="objects_path" value="$(find pick_place)/objects/Can"/>
         <param name="settings_path" value="$(find pick_place)/config/find_object.ini"/>
 
         <!-- Camera topics -->
@@ -17,37 +19,48 @@
         <param name="rgb/image_transport" value="compressed"/>
         <param name="depth_registered/image_transport" value="raw"/>
     </node>
-    <node name="object_extractor" pkg="pick_place" type="object_extractor.py" output="screen">
+    <node unless="$(arg color_detection)" name="object_extractor" pkg="pick_place" type="object_extractor.py" output="screen">
 		<param name="object_prefix" value="object" type="str"/>
         <param name="target_frame_id" value="depth_link"/>
         <remap from="/camera/color/camera_info" to="/limo/color/camera_info" />
 	</node>
-
-    <!--  *************** Add Object Service ****************  -->
-    <!-- <node name="add_object_service" pkg="pick_place" type="add_object" output="screen">
-        <remap from="/camera/depth/points" to="/limo/depth/points" />
-        <remap from="/object_bounding_boxes" to="/detection/object" />
-        <param name="bbox_scale_factor" value="0.9" />
-        <param name="plane_distance_threshold" value="0.015" />
-        <param name="cylinder_score_threshold" value="0.4" />
-        <param name="plane_max_iterations" value="500" />
-        <param name="plane_probability" value="0.95" />
-        <param name="use_multiple_plane_removal" value="false" />
-    </node> -->
-
-	<!--  *************** Pick/Place Service ****************  -->
-    <!-- <node name="mobile_gripper" pkg="pick_place" type="mobile_gripper" output="screen">
-        <param name="rosconsole_logger_levels" value="moveit_task_constructor=DEBUG, moveit_ros_planning=INFO, moveit_core=INFO"/>
-        <remap from="/object_bounding_boxes" to="/detection/object" />
-        <param name="bbox_scale_factor" value="0.80" />
-        <param name="use_scene_object" value="true" />
-        <param name="object_name" value="detected_object" />
-        <param name="table_name" value="detected_table" />
-        <param name="zero_state_name" value="zero" />
-        <param name="top_grip_state_name" value="top_grip" />
-        <param name="front_grip_state_name" value="front_grip" />
-        <param name="arm_group" value="arm" />
-        <param name="gripper_group" value="gripper" />
-        <param name="grasp_joint" value="grasping_frame_joint" />
-    </node> -->
+    
+    <!--  **************** color-based Object Detection ****************  -->
+    <node if="$(arg color_detection)" name="color_detection" pkg="pick_place" type="color_detection" output="screen">
+        <!-- Main settings -->
+        <remap from="/camera/color/camera_info" to="/limo/color/camera_info"/>
+        <remap from="/camera/color/image_raw" to="/limo/color/image_raw"/>
+        <remap from="/camera/depth/image_raw" to="/limo/depth/image_raw"/>
+        <param name="target_frame_id" value="depth_link"/>
+        <param name="objects_path" value="$(find pick_place)/objects/colored"/>
+        <!-- Color extraction parameters -->
+        <param name="hsv_tolerance" value="15" type="int"/>  <!-- Hue tolerance in degrees (0-180) -->
+        <param name="saturation_min" value="40" type="int"/>  <!-- Minimum saturation (0-255) -->
+        <param name="value_min" value="40" type="int"/>       <!-- Minimum value/brightness (0-255) -->
+        <!-- Aspect ratio matching -->
+        <param name="aspect_ratio_tolerance" value="0.3" type="double"/>  <!-- 30% tolerance -->
+        <!-- Confidence scoring weights (must sum to ~1.0) -->
+        <param name="color_match_weight" value="0.35" type="double"/>        <!-- HSV color similarity -->
+        <param name="aspect_ratio_weight" value="0.30" type="double"/>       <!-- Shape similarity -->
+        <param name="area_weight" value="0.20" type="double"/>               <!-- Size preference -->
+        <param name="depth_quality_weight" value="0.15" type="double"/>      <!-- Depth reliability -->
+        <!-- Confidence score threshold -->
+        <param name="score_threshold" value="0.7" type="double"/> 
+        <!-- Detection parameters -->
+        <param name="min_contour_area" value="100" type="int"/>
+        <param name="max_contour_area" value="50000" type="int"/>
+        <!-- Image preprocessing -->
+        <param name="blur_kernel_size" value="5" type="int"/>
+        <param name="morph_kernel_size" value="3" type="int"/>
+        <!-- Box size constraints (meters) -->
+        <param name="min_box_size" value="0.02" type="double"/>
+        <param name="max_box_size" value="0.5" type="double"/>
+        <!-- Valid depth range and depth fallback for non-valid depth readings -->
+        <param name="min_depth" value="0.3" type="double"/>
+        <param name="max_depth" value="3.0" type="double"/>
+        <param name="use_fallback_depth" value="true" type="bool"/>
+        <param name="fallback_depth" value="0.3" type="double"/>
+        <!-- Debug visualization -->
+        <param name="show_debug_image" value="true" type="bool"/>
+    </node>
 </launch>
