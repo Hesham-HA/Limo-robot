@@ -54,8 +54,8 @@ Visualization Manager:
     - Alpha: 1
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds:
-        Max Value: 7.389315128326416
-        Min Value: -1.129188060760498
+        Max Value: 6.580072402954102
+        Min Value: -1.1548112630844116
         Value: true
       Axis: X
       Channel Name: intensity
@@ -91,7 +91,7 @@ Visualization Manager:
       Value: true
     - Class: rviz/Image
       Enabled: true
-      Image Topic: /limo/color/image_raw
+      Image Topic: /detection/debug_image
       Max Value: 1
       Median window: 5
       Min Value: 0
@@ -279,7 +279,8 @@ Visualization Manager:
       Marker Topic: /detection/object
       Name: MarkerArray
       Namespaces:
-        {}
+        detected_boxes: true
+        labels: true
       Queue Size: 100
       Value: true
   Enabled: true

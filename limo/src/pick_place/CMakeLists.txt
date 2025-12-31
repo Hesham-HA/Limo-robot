@@ -10,12 +10,17 @@ project(pick_place)
 find_package(catkin REQUIRED COMPONENTS
   roscpp
   rospy
+  roslib
   std_msgs
   std_srvs
   cmake_modules
   moveit_core
   moveit_ros_planning
   moveit_ros_planning_interface
+  visualization_msgs
+  cv_bridge
+  image_transport
+  message_filters
   message_generation
 )
 
@@ -23,6 +28,8 @@ find_package(catkin REQUIRED COMPONENTS
 # find_package(Boost REQUIRED COMPONENTS system)
 find_package(Eigen3 REQUIRED)
 find_package(PCL REQUIRED)
+find_package(OpenCV REQUIRED)
+find_package(Boost REQUIRED COMPONENTS filesystem system)
 
 ## Uncomment this if the package has a setup.py. This macro ensures
 ## modules and global scripts declared therein get installed
@@ -110,6 +117,7 @@ generate_messages(
 ## DEPENDS: system dependencies of this project that dependent projects also need
 catkin_package(
  CATKIN_DEPENDS message_runtime
+ DEPENDS OpenCV
 )
 
 ###########
@@ -123,6 +131,8 @@ include_directories(
   ${catkin_INCLUDE_DIRS}
   ${EIGEN3_INCLUDE_DIRS}
   ${PCL_INCLUDE_DIRS}
+  ${OpenCV_INCLUDE_DIRS}
+  ${Boost_INCLUDE_DIRS}
 )
 
 ## Declare a C++ library
@@ -139,6 +149,7 @@ include_directories(
 ## With catkin_make all packages are built within a single CMake context
 ## The recommended prefix ensures that target names across packages don't collide
 add_executable(pick_place src/pick_place.cpp)
+add_executable(color_detection src/color_detection.cpp)
 
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
@@ -152,6 +163,7 @@ add_executable(pick_place src/pick_place.cpp)
 
 ## Specify libraries to link a library or executable target against
 target_link_libraries(pick_place ${catkin_LIBRARIES} ${Boost_LIBRARIES} ${PCL_LIBRARIES})
+target_link_libraries(color_detection ${catkin_LIBRARIES} ${Boost_LIBRARIES} ${OpenCV_LIBRARIES})
 
 #############
 ## Install ##
