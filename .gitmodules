@@ -1,3 +1,3 @@
 [submodule "limo/src/limo_cobot_sim"]
 	path = limo/src/limo_cobot_sim
-	url = https://github.com/agilexrobotics/limo_cobot_sim.git
+	url = https://github.com/Hesham-HA/limo_cobot_sim.git

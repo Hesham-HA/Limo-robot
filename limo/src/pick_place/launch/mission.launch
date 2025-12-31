@@ -1,0 +1,8 @@
+<?xml version="1.0"?>
+<launch>
+    <!--TODO: Include all required launch files here -->
+    <!-- -->
+    <!-- Mission Manager Node -->
+    <node name="mission_manager" pkg="pick_place" type="manager.py" output="screen">
+    </node>
+</launch>

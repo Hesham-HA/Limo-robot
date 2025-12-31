@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <launch>
 	<arg name="use_rviz" default="true"/>
-	<arg name="map_file" default="$(find pick_place)/maps/clearpath_map.yaml"/>
+	<arg name="map_file" default="$(find pick_place)/maps/office_map.yaml"/>
 	<arg name="map_frame_id" default="map"/>
 
 	<!--  **************** Map Server ****************  -->
@@ -9,19 +9,13 @@
 		<param name="frame_id" value="$(arg map_frame_id)"/>
 	</node>
 
-	<!--  **************** Pose estimation ****************  -->
-    <node pkg="robot_pose_ekf" name="robot_pose_ekf" type="robot_pose_ekf">
-        <param name="output_frame" value="odom"/>
-        <param name="base_footprint_frame" value="base_link"/>
-        <remap from="imu_data" to="imu"/>
-    </node>
-
 	<!--  ************** Localization ***************  -->
 	<node pkg="amcl" type="amcl" name="amcl" output="screen">
 		<remap from="scan" to="/limo/scan"/>
         <rosparam file="$(find pick_place)/param/amcl_params_diff.yaml" command="load"/>
 	    <param name="initial_pose_x"            value="0"/>
 		<param name="initial_pose_y"            value="0"/>
+		<param name="initial_pose_z"            value="0"/>
 		<param name="initial_pose_a"            value="0"/>
 	</node>
 

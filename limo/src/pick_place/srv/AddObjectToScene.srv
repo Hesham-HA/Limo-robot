@@ -1,0 +1,8 @@
+# Request
+bool is_table  # true if adding a table, false if adding a detected object
+
+---
+
+# Response
+bool success
+string message

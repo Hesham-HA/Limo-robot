@@ -17,6 +17,7 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/*
 # install ros package dependencies
 RUN apt-get update && apt-get install -y \
+  python3-catkin-tools \
   ros-noetic-ros-control \
   ros-noetic-ros-controllers \
   ros-noetic-teleop-twist-keyboard \
@@ -36,6 +37,8 @@ RUN apt-get update && apt-get install -y \
   ros-noetic-rtabmap \
   ros-noetic-rtabmap-ros \
   ros-noetic-find-object-2d \
+  ros-noetic-moveit-commander \
+  libfmt-dev \
   && rm -rf /var/lib/apt/lists/*
 # set up the entrypoint and bashrc
 COPY entrypoint.sh /entrypoint.sh
