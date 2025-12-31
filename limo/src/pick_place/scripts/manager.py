@@ -4,6 +4,7 @@ from geometry_msgs.msg import PoseStamped
 from std_srvs.srv import Empty
 from actionlib_msgs.msg import GoalID
 import math
+import tf
 
 class PickPlaceManager:
 
@@ -50,6 +51,11 @@ class PickPlaceManager:
         self.pause_rtabmap = rospy.ServiceProxy("/rtabmap/pause", Empty)
         self.resume_rtabmap = rospy.ServiceProxy("/rtabmap/resume", Empty)
 
+        # -------------------
+        # TF Listener
+        # -------------------
+        self.tf_listener = tf.TransformListener()
+
         rospy.loginfo("Pick & Place Manager ready")
 
     # ==========================================
@@ -57,16 +63,11 @@ class PickPlaceManager:
     # ==========================================
     def hard_stop(self):
         rospy.loginfo("HARD STOP: Stopping exploration & pausing RTAB-Map")
-
-        # 1) Cancel all active move_base goals
         self.cancel_pub.publish(GoalID())
-
-        # 2) Pause RTAB-Map
         try:
             self.pause_rtabmap()
         except rospy.ServiceException as e:
             rospy.logwarn(f"RTAB-Map pause failed: {e}")
-
         self.explore_active = False
 
     # ==========================================
@@ -85,6 +86,9 @@ class PickPlaceManager:
 
         # Navigate to object
         self.navigate_to_object()
+
+        # Navigate to drop-off (5 cm before the object)
+        self.navigate_to_dropoff(self.object_pose)
 
     # ==========================================
     # Navigate to detected object with offset
@@ -119,7 +123,47 @@ class PickPlaceManager:
         rospy.loginfo("Navigation goal published (offset 0.35 m)")
 
     # ==========================================
-    # Resume RTAB-Map (optional, call after pick)
+    # Navigate to drop-off point (5 cm before object)
+    # ==========================================
+    def navigate_to_dropoff(self, object_pose):
+        rospy.loginfo("Navigating to drop-off point near the object")
+
+        try:
+            # Transform object pose to map frame
+            self.tf_listener.waitForTransform("map", object_pose.header.frame_id,
+                                              rospy.Time(0), rospy.Duration(4.0))
+            object_in_map = self.tf_listener.transformPose("map", object_pose)
+        except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException) as e:
+            rospy.logerr(f"TF transform failed: {e}")
+            return
+
+        # Compute vector from robot origin (assume robot at 0,0 in map frame) to object
+        obj_x = object_in_map.pose.position.x
+        obj_y = object_in_map.pose.position.y
+        distance = math.sqrt(obj_x**2 + obj_y**2)
+
+        offset = 0.05  # 5 cm before object
+        if distance > offset:
+            factor = (distance - offset) / distance
+            drop_x = obj_x * factor
+            drop_y = obj_y * factor
+        else:
+            drop_x = obj_x
+            drop_y = obj_y
+
+        goal = PoseStamped()
+        goal.header.frame_id = "map"
+        goal.header.stamp = rospy.Time.now()
+        goal.pose.position.x = drop_x
+        goal.pose.position.y = drop_y
+        goal.pose.position.z = 0.0
+        goal.pose.orientation = object_in_map.pose.orientation
+
+        self.goal_pub.publish(goal)
+        rospy.loginfo("Drop-off navigation goal published (5 cm before object)")
+
+    # ==========================================
+    # Resume RTAB-Map (optional)
     # ==========================================
     def resume_mapping(self):
         rospy.loginfo("Resuming RTAB-Map...")
