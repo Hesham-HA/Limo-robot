@@ -5887,13 +5887,13 @@
             <lighting>1</lighting>
             <script>
               <uri>file://media/materials/scripts/gazebo.material</uri>
-              <name>Gazebo/Blue</name>
+              <name>Gazebo/Yellow</name>
             </script>
             <shader type='pixel'>
               <normal_map>__default__</normal_map>
             </shader>
-            <ambient>0.1 0.2 0.9 1</ambient>
-            <diffuse>0.1 0.2 0.9 1</diffuse>
+            <ambient>0.6 0.5 0.3 1</ambient>
+            <diffuse>0.6 0.5 0.3 1</diffuse>
             <specular>0.01 0.01 0.01 1</specular>
             <emissive>0 0 0 1</emissive>
           </material>
@@ -5905,7 +5905,7 @@
       </link>
     </model>
     <model name='unit_box_2'>
-      <pose frame=''>8.3 5.4 0.1325 0 0 0</pose>
+      <pose frame=''>-6.5 -0.8 0.1325 0 0 0</pose>
       <link name='link'>
         <inertial>
           <mass>0.05</mass>
@@ -6033,10 +6033,80 @@
         <kinematic>0</kinematic>
       </link>
       <static>0</static>
-      <pose>8.7 5.5 0.127 0 0.042701 0.7</pose>
+      <pose>-6.5 -0.55 0.127 0 0.042701 0.7</pose>
     </model>
     <model name='unit_box_3'>
-      <pose frame=''>-7.5 -0.8 0.06 0 0 0</pose>
+      <pose frame=''>-6.6 -0.65 0.06 0 0 0</pose>
+      <link name='link'>
+        <inertial>
+          <mass>1</mass>
+          <inertia>
+            <ixx>0.0416667</ixx>
+            <ixy>0</ixy>
+            <ixz>0</ixz>
+            <iyy>0.0566667</iyy>
+            <iyz>0</iyz>
+            <izz>0.0683333</izz>
+          </inertia>
+        </inertial>
+        <collision name='collision'>
+          <geometry>
+            <box>
+              <size>0.3 0.45 0.12</size>
+            </box>
+          </geometry>
+          <surface>
+            <friction>
+              <ode>
+                <mu>1</mu>
+                <mu2>1</mu2>
+              </ode>
+              <torsional>
+                <ode/>
+              </torsional>
+            </friction>
+            <contact>
+              <ode>
+                <kp>1e+07</kp>
+                <kd>1</kd>
+                <min_depth>0.001</min_depth>
+                <max_vel>0.1</max_vel>
+              </ode>
+            </contact>
+            <bounce/>
+          </surface>
+          <max_contacts>10</max_contacts>
+        </collision>
+        <visual name='visual'>
+          <pose frame=''>0 0 0 0 -0 0</pose>
+          <geometry>
+            <box>
+              <size>0.3 0.45 0.12</size>
+            </box>
+          </geometry>
+          <material>
+            <lighting>1</lighting>
+            <script>
+              <uri>file://media/materials/scripts/gazebo.material</uri>
+              <name>Gazebo/Blue</name>
+            </script>
+            <shader type='pixel'>
+              <normal_map>__default__</normal_map>
+            </shader>
+            <ambient>0.1 0.2 0.8 1</ambient>
+            <diffuse>0.1 0.2 0.8 1</diffuse>
+            <specular>0.01 0.01 0.01 1</specular>
+            <emissive>0 0 0 1</emissive>
+          </material>
+          <transparency>0</transparency>
+          <cast_shadows>1</cast_shadows>
+        </visual>
+        <self_collide>0</self_collide>
+        <kinematic>0</kinematic>
+      </link>
+    </model>
+    <model name='unit_box_4'>
+      <pose frame=''>-7 6.0 0.06 0 0 0</pose>
       <link name='link'>
         <inertial>
           <mass>1</mass>

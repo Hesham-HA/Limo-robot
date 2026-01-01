@@ -97,11 +97,11 @@
         <param name="aspect_ratio_tolerance" value="0.3" type="double"/>  <!-- 30% tolerance -->
         <!-- Confidence scoring weights (must sum to ~1.0) -->
         <param name="color_match_weight" value="0.35" type="double"/>        <!-- HSV color similarity -->
-        <param name="aspect_ratio_weight" value="0.30" type="double"/>       <!-- Shape similarity -->
-        <param name="area_weight" value="0.20" type="double"/>               <!-- Size preference -->
-        <param name="depth_quality_weight" value="0.15" type="double"/>      <!-- Depth reliability -->
+        <param name="aspect_ratio_weight" value="0.35" type="double"/>       <!-- Shape similarity -->
+        <param name="area_weight" value="0.15" type="double"/>               <!-- Size preference -->
+        <param name="depth_quality_weight" value="0.10" type="double"/>      <!-- Depth reliability -->
         <!-- Confidence score threshold -->
-        <param name="score_threshold" value="0.7" type="double"/> 
+        <param name="score_threshold" value="0.5" type="double"/> 
         <!-- Detection parameters -->
         <param name="min_contour_area" value="100" type="int"/>
         <param name="max_contour_area" value="50000" type="int"/>
