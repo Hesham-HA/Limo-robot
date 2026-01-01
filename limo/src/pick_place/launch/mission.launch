@@ -3,6 +3,7 @@
     <!-- Object Search -->
     <include file="$(dirname)/object_search.launch">
         <arg name="use_rviz" value="false"/>
+        <arg name="init_exploration" value="false"/>
     </include>
 
     <!-- Moveit -->
