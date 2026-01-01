@@ -5939,8 +5939,8 @@
             </friction>
             <contact>
               <ode>
-                <kp>1e+07</kp>
-                <kd>1</kd>
+                <kp>1e+06</kp>
+                <kd>150</kd>
                 <min_depth>0.001</min_depth>
                 <max_vel>0.1</max_vel>
               </ode>
