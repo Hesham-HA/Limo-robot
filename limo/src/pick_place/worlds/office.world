@@ -5905,7 +5905,7 @@
       </link>
     </model>
     <model name='unit_box_2'>
-      <pose frame=''>-6.5 -0.8 0.1325 0 0 0</pose>
+      <pose frame=''>-6.0 -0.8 0.1325 0 0 0</pose>
       <link name='link'>
         <inertial>
           <mass>0.05</mass>
@@ -6033,10 +6033,10 @@
         <kinematic>0</kinematic>
       </link>
       <static>0</static>
-      <pose>-6.5 -0.55 0.127 0 0.042701 0.7</pose>
+      <pose>-6.0 -0.55 0.127 0 0.042701 0.7</pose>
     </model>
     <model name='unit_box_3'>
-      <pose frame=''>-6.6 -0.65 0.06 0 0 0</pose>
+      <pose frame=''>-6.1 -0.65 0.06 0 0 0</pose>
       <link name='link'>
         <inertial>
           <mass>1</mass>

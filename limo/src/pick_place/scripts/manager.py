@@ -53,9 +53,9 @@ class PickPlaceManager:
         rospy.wait_for_service("/add_object_to_scene")
         self.add_object = rospy.ServiceProxy("/add_object_to_scene", AddObjectToScene)
         rospy.wait_for_service("/pick_object")
-        self.pick_lift_object = rospy.ServiceProxy("/pick_object", Empty)
+        self.pick_lift_object = rospy.ServiceProxy("/pick_object", Trigger)
         rospy.wait_for_service("/place_object")
-        self.place_release_object = rospy.ServiceProxy("/place_object", Empty)
+        self.place_release_object = rospy.ServiceProxy("/place_object", Trigger)
         
         # Subscribers "This intiates the callback when an object is detected"
         self.obj_sub = rospy.Subscriber("/object/detection", MarkerArray, self.object_detected_callback)
@@ -66,6 +66,8 @@ class PickPlaceManager:
     # start search
     def start_search(self):
         rospy.loginfo("Starting search!!!")
+        self.object_detected = False
+        self.table_detected = False
         if self.exploration:
             rospy.logwarn("Exploration is already running !!!")
             return
@@ -120,6 +122,8 @@ class PickPlaceManager:
                         'z': marker.pose.position.z
                     }
                 }
+        obj_once_detected = self.object_detected
+        tab_once_detected = self.table_detected
         for id_, label in self.labels.items():
             label_type = label["text"]
             if (id_-1) in self.cubes:
@@ -129,7 +133,8 @@ class PickPlaceManager:
                 elif label_type == "yellowtable":
                     self.table = self.cubes[id_-1]
                     self.table_detected = True
-        rospy.loginfo(f"Detected object: {self.object_detected}, detected table: {self.table_detected}")
+        if self.object_detected != obj_once_detected or self.table_detected != tab_once_detected:
+            rospy.loginfo(f"Detected object: {self.object_detected}, detected table: {self.table_detected}")
     
     # Add the detected object/table to the planning scene
     def add_to_scene(self, type: Literal["object", "table"]):
@@ -249,7 +254,6 @@ class PickPlaceManager:
             response.message = "Failed to reset mapping, mission is cancelled!"
             return response
         self.start_search()
-        self.table_detected = False
         # Wait till table is detected and tracked
         while not self.table_detected:
             rospy.loginfo("Looking for the placing table .....")

@@ -15,7 +15,7 @@
 
     <!--  **************** Passive Graph SLAM ****************  -->
     <group ns="rtabmap">
-        <node name="rtabmap" pkg="rtabmap_slam" type="rtabmap" output="screen" args="--delete_db_on_start">
+        <node name="rtabmap" pkg="rtabmap_slam" type="rtabmap" args="--delete_db_on_start">
             <param name="frame_id" type="string" value="base_footprint"/>
             <remap from="odom" to="/odom"/>
             <param name="subscribe_scan" type="bool" value="true"/>
@@ -30,6 +30,8 @@
             <param name="topic_queue_size" type="int" value="20"/>
             <remap from="grid_map" to="/rtabmap/grid_map"/>
             <param name="Mem/IncrementalMemory" type="string" value="true"/>
+            <param name="Rtabmap/DetectionRate" value="0.5" />
+            <param name="Rtabmap/MapUpdateDetectionRate" value="0.5" />
             <!-- Don't publish to the tf tree, use only for visual exploration -->
             <param name="publish_tf" type="bool" value="false"/>
         </node>
@@ -42,16 +44,16 @@
     <!--  ************** exploration ***************  -->
 	<node if="$(arg init_exploration)" pkg="explore_lite" type="explore" respawn="false" name="explore" output="screen">
 		<param name="robot_base_frame" value="base_link"/>
-		<param name="costmap_topic" value="/rtabmap/grid_map"/>
+		<param name="costmap_topic" value="/map"/>
 		<param name="costmap_updates_topic" value="/map_updates"/>
 		<param name="visualize" value="true"/>
-		<param name="planner_frequency" value="0.1"/>
-		<param name="progress_timeout" value="20.0"/>
-		<param name="potential_scale" value="3.0"/>
+		<param name="planner_frequency" value="0.5"/>
+		<param name="progress_timeout" value="10.0"/>
+		<param name="potential_scale" value="50.0"/>
 		<param name="orientation_scale" value="0.0"/>
 		<param name="gain_scale" value="1.0"/>
 		<param name="transform_tolerance" value="0.3"/>
-		<param name="min_frontier_size" value="0.75"/>
+		<param name="min_frontier_size" value="0.1"/>
 	</node>
 
     <!-- Use simulation time -->
@@ -90,18 +92,18 @@
         <param name="target_frame_id" value="depth_link"/>
         <param name="objects_path" value="$(find pick_place)/objects/colored"/>
         <!-- Color extraction parameters -->
-        <param name="hsv_tolerance" value="15" type="int"/>  <!-- Hue tolerance in degrees (0-180) -->
-        <param name="saturation_min" value="40" type="int"/>  <!-- Minimum saturation (0-255) -->
+        <param name="hsv_tolerance" value="30" type="int"/>  <!-- Hue tolerance in degrees (0-180) -->
+        <param name="saturation_min" value="210" type="int"/>  <!-- Minimum saturation (0-255) -->
         <param name="value_min" value="40" type="int"/>       <!-- Minimum value/brightness (0-255) -->
         <!-- Aspect ratio matching -->
         <param name="aspect_ratio_tolerance" value="0.3" type="double"/>  <!-- 30% tolerance -->
         <!-- Confidence scoring weights (must sum to ~1.0) -->
-        <param name="color_match_weight" value="0.35" type="double"/>        <!-- HSV color similarity -->
-        <param name="aspect_ratio_weight" value="0.35" type="double"/>       <!-- Shape similarity -->
-        <param name="area_weight" value="0.15" type="double"/>               <!-- Size preference -->
-        <param name="depth_quality_weight" value="0.10" type="double"/>      <!-- Depth reliability -->
+        <param name="color_match_weight" value="1.0" type="double"/>        <!-- HSV color similarity -->
+        <param name="aspect_ratio_weight" value="0.0" type="double"/>       <!-- Shape similarity -->
+        <param name="area_weight" value="0.0" type="double"/>               <!-- Size preference -->
+        <param name="depth_quality_weight" value="0.0" type="double"/>      <!-- Depth reliability -->
         <!-- Confidence score threshold -->
-        <param name="score_threshold" value="0.5" type="double"/> 
+        <param name="score_threshold" value="0.55" type="double"/> 
         <!-- Detection parameters -->
         <param name="min_contour_area" value="100" type="int"/>
         <param name="max_contour_area" value="50000" type="int"/>
@@ -109,7 +111,7 @@
         <param name="blur_kernel_size" value="5" type="int"/>
         <param name="morph_kernel_size" value="3" type="int"/>
         <!-- Box size constraints (meters) -->
-        <param name="min_box_size" value="0.02" type="double"/>
+        <param name="min_box_size" value="0.01" type="double"/>
         <param name="max_box_size" value="0.5" type="double"/>
         <!-- Valid depth range and depth fallback for non-valid depth readings -->
         <param name="min_depth" value="0.3" type="double"/>

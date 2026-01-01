@@ -20,5 +20,5 @@
     </node>
 
     <!--  **************** Visualisation ****************  -->
-    <node pkg="rviz" type="rviz" name="rviz" args="-d $(find pick_place)/config/mission.rviz" output="screen"/>
+    <node pkg="rviz" type="rviz" name="rviz" args="-d $(find pick_place)/config/mission.rviz"/>
 </launch>
