@@ -11,7 +11,7 @@ from visualization_msgs.msg import Marker, MarkerArray
 from move_base_msgs.msg import MoveBaseAction, MoveBaseActionGoal
 from geometry_msgs.msg import PoseStamped, Pose, Point, Quaternion, Twist
 from std_msgs.msg import Header
-
+from std_srvs.srv import Empty, EmptyResponse
 
 class PickPlaceManager:
     """
@@ -54,6 +54,7 @@ class PickPlaceManager:
         # self.move_base.wait_for_service()
         rospy.wait_for_service("/rtabmap/pause")
         rospy.wait_for_service("/rtabmap/resume")
+        rospy.wait_for_service("/rtabmap/trigger_new_map")
         rospy.wait_for_service("/add_object_to_scene")
         rospy.wait_for_service("/pick_object")
         rospy.wait_for_service("/place_object")
@@ -94,7 +95,6 @@ class PickPlaceManager:
         # First pass: Extract cubes and labels
         for marker in msg.markers:
             if marker.type == 1: # CUBE
-                rospy.loginfo(f"found {marker.id}")
                 self.cubes[marker.id] = {
                     'position': {'x': marker.pose.position.x, 'y': marker.pose.position.y, 'z': marker.pose.position.z},
                     'orientation': {
@@ -115,39 +115,23 @@ class PickPlaceManager:
                         'z': marker.pose.position.z
                     }
                 }
-                rospy.loginfo(f"found {marker.id}")
-                rospy.loginfo(f"found {self.labels[marker.id]['text']}")
         for id_, label in self.labels.items():
             label_type = label["text"]
-            if id_ in self.cubes:
-                rospy.loginfo(f"found {id_}")
+            if (id_-1) in self.cubes:
                 if label_type == "redcube":
-                    self.object = self.cubes[id_]
+                    self.object = self.cubes[id_-1]
                     self.object_detected = True
                 elif label_type == "yellowtable":
-                    self.table = self.cubes[id_]
+                    self.table = self.cubes[id_-1]
                     self.table_detected = True
-        
         rospy.loginfo(f"Detected object: {self.object_detected}, detected table: {self.table_detected}")
-        # Step 1: Add object to the planning scene
-        if self.object_detected:
-            self.add_to_scene("object")
-            self.object_detected = False
-        if self.table_detected:
-            self.add_to_scene("table")
-            self.table_detected = False
-        
-        # # Step 2: Navigate to object
-        # self.navigate_to_object()
-        
-        # # Step 3: Pick the object
-        # self.pick_object()
     
     # Add the detected object/table to the planning scene
     def add_to_scene(self, type: Literal["object", "table"]):
         rospy.loginfo(f"Adding {type} to planning scene...")
         
-        message = AddObjectToScene(is_table = True if type=="table" else False)
+        message = AddObjectToScene()
+        message.is_table = True if type=="table" else False
         self.add_object(message)
         
         rospy.loginfo(f"Added {type} to planning scene!")
@@ -222,26 +206,28 @@ class PickPlaceManager:
         self.place_release_object()
     
     # A callback when the full mission is triggered
-    def execute_mission(self):
+    def execute_mission(self, msg):
         # High-level method to execute the full pick and place mission
         if not self.exploare_active:
             rospy.logwarn("Exploration is not active. A new exploration is triggered!")
             # TODO: run the explore_lite node again to search for objects
             self.exploare_active = True
-        self.search_for_objects()
-        if self.object_location:
-            self.navigate_to_object(self.object_location)
-            self.pick_object()
-            self.navigate_to_dropoff()
-            if self.object_location:  # Assuming we reuse object_location for table location
-                self.navigate_to_table(self.object_location)
-                self.place_object()
+        rospy.logwarn("Executing full pick and place mission...")
+        return EmptyResponse()
+        # self.search_for_objects()
+        # if self.object_location:
+        #     self.navigate_to_object(self.object_location)
+        #     self.pick_object()
+        #     self.navigate_to_dropoff()
+        #     if self.object_location:  # Assuming we reuse object_location for table location
+        #         self.navigate_to_table(self.object_location)
+        #         self.place_object()
     
     def run(self):
         # TODO: Create a ros service that triggers the full pick and place mission
+        rospy.Service('run/mission', Empty, self.execute_mission)
         rospy.loginfo("Pick and Place Manager is running...")
-        while not rospy.is_shutdown():
-            rospy.spin()
+        rospy.spin()
 
 if __name__ == '__main__':
     manager = PickPlaceManager()
