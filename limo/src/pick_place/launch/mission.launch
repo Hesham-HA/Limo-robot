@@ -1,8 +1,23 @@
 <?xml version="1.0"?>
 <launch>
-    <!--TODO: Include all required launch files here -->
-    <!-- -->
+    <!-- Object Search -->
+    <include file="$(dirname)/object_search.launch">
+        <arg name="use_rviz" value="false"/>
+    </include>
+
+    <!-- Moveit -->
+    <include file="$(dirname)/moveit.launch">
+        <arg name="use_rviz" value="false"/>
+    </include>
+
+    <!-- Pick and Place operations -->
+    <include file="$(dirname)/pick_place.launch"/>
+
     <!-- Mission Manager Node -->
     <node name="mission_manager" pkg="pick_place" type="manager.py" output="screen">
+        <remap from="/object/detection" to="/detection/object"/>
     </node>
+
+    <!--  **************** Visualisation ****************  -->
+    <node pkg="rviz" type="rviz" name="rviz" args="-d $(find pick_place)/config/mission.rviz" output="screen"/>
 </launch>

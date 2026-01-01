@@ -1,72 +1,7 @@
 <?xml version="1.0"?>
 <launch>
-	<arg name="use_rviz" default="true"/>
 	<arg name="map_frame_id" default="map"/>
 
-	<!--  **************** Pose estimation ****************  -->
-    <node pkg="robot_pose_ekf" name="robot_pose_ekf" type="robot_pose_ekf">
-        <param name="output_frame" value="odom"/>
-        <param name="base_footprint_frame" value="base_link"/>
-        <remap from="imu_data" to="imu"/>
-    </node>
-
-	<!--  **************** SLAM ****************  -->
-	<node pkg="gmapping" type="slam_gmapping" name="slam_gmapping" output="screen">
-		<remap from="/scan" to="/limo/scan"/>
-		<param name="map_frame" value="$(arg map_frame_id)"/>
-		<param name="map_update_interval" value="5.0"/>
-		<param name="maxUrange" value="16.0"/>
-		<param name="sigma" value="0.05"/>
-		<param name="kernelSize" value="1"/>
-		<param name="lstep" value="0.05"/>
-		<param name="astep" value="0.05"/>
-		<param name="iterations" value="5"/>
-		<param name="lsigma" value="0.075"/>
-		<param name="ogain" value="3.0"/>
-		<param name="lskip" value="0"/>
-		<param name="srr" value="0.1"/>
-		<param name="srt" value="0.2"/>
-		<param name="str" value="0.1"/>
-		<param name="stt" value="0.2"/>
-		<param name="linearUpdate" value="1.0"/>
-		<param name="angularUpdate" value="0.5"/>
-		<param name="temporalUpdate" value="3.0"/>
-		<param name="resampleThreshold" value="0.5"/>
-		<param name="particles" value="30"/>
-		<param name="xmin" value="-50.0"/>
-		<param name="ymin" value="-50.0"/>
-		<param name="xmax" value="50.0"/>
-		<param name="ymax" value="50.0"/>
-		<param name="delta" value="0.05"/>
-		<param name="llsamplerange" value="0.01"/>
-		<param name="llsamplestep" value="0.01"/>
-		<param name="lasamplerange" value="0.005"/>
-		<param name="lasamplestep" value="0.005"/>
-    </node>
-
-    <!--  ************** Navigation ***************  -->
-	<node pkg="move_base" type="move_base" respawn="false" name="move_base" output="screen">
-		<remap from="scan" to="/limo/scan"/>
-  	  	<rosparam file="$(find pick_place)/param/costmap_common_params.yaml" command="load" ns="global_costmap"/>
-  	 	<rosparam file="$(find pick_place)/param/costmap_common_params.yaml" command="load" ns="local_costmap"/>
-  		<rosparam file="$(find pick_place)/param/local_costmap_params.yaml" command="load"/>
-  		<rosparam file="$(find pick_place)/param/global_costmap_params.yaml" command="load"/>
-  		<rosparam file="$(find pick_place)/param/planner.yaml" command="load"/>
-		<param name="static_layer/map_topic" value="/map"/>
-		<param name="global_costmap/global_frame" value="$(arg map_frame_id)"/>
-		<param name="local_costmap/global_frame" value="$(arg map_frame_id)"/>
-
-		<param name="base_global_planner" value="global_planner/GlobalPlanner"/>
-		<param name="planner_frequency" value="1.0"/>
-		<param name="planner_patience" value="10.0"/>
-		<param name="base_local_planner" value="base_local_planner/TrajectoryPlannerROS"/>
-		<param name="controller_frequency" value="5.0"/>
-		<param name="controller_patience" value="15.0"/>
-        <param name="clearing_rotation_allowed" value="true"/>
-		<param name="track_unknown_space" value="true"/>
-	</node>
-    
-	<!--  ************** exploration ***************  -->
 	<node pkg="explore_lite" type="explore" respawn="false" name="explore" output="screen">
 		<param name="robot_base_frame" value="base_link"/>
 		<param name="costmap_topic" value="/map"/>
@@ -80,8 +15,6 @@
 		<param name="transform_tolerance" value="0.3"/>
 		<param name="min_frontier_size" value="0.75"/>
 	</node>
-
-	<!--  **************** Visualisation ****************  -->
-	<node name="rviz" pkg="rviz" type="rviz" args="-d $(find pick_place)/config/exploration.rviz" if="$(arg use_rviz)"/>
+	
 </launch>
 
