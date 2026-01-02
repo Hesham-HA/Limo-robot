@@ -11,11 +11,11 @@ import signal
 from typing import Literal, Dict
 from visualization_msgs.msg import MarkerArray
 from move_base_msgs.msg import MoveBaseAction, MoveBaseGoal
-from geometry_msgs.msg import Twist, PoseStamped, Point
+from geometry_msgs.msg import Twist, PoseStamped
 from nav_msgs.msg import Odometry
 import tf2_ros
 import tf2_geometry_msgs
-from tf.transformations import euler_from_quaternion
+from tf.transformations import quaternion_from_euler
 from std_srvs.srv import Empty
 
 class PickPlaceManager:
@@ -121,7 +121,7 @@ class PickPlaceManager:
     
     # get current pose
     def pose_estimation(self, msg):
-        self.robot_pose = msg.pose.pose
+        self.robot_pose = msg
     
     # Object/Table detection callback
     def object_detected_callback(self, msg):
@@ -156,10 +156,10 @@ class PickPlaceManager:
         for id_, label in self.labels.items():
             label_type = label["text"]
             if (id_-1) in self.cubes:
-                if label_type == "redcube":
+                if label_type == "redcube" or label_type.startswith("object"):
                     self.object = self.cubes[id_-1]
                     self.object_detected = True
-                elif label_type == "yellowtable":
+                elif label_type == "yellowtable" or label_type.startswith("table"):
                     self.table = self.cubes[id_-1]
                     self.table_detected = True
         if self.object_detected != obj_once_detected or self.table_detected != tab_once_detected:
@@ -183,98 +183,8 @@ class PickPlaceManager:
         rospy.logwarn(f"Failed to add {type} to planning scene!")
         return False
     
-    def head_to_target(self, target_x, target_y, yaw_tolerance=0.05):
-        """Rotate in place until robot faces (target_x, target_y).
-        target_x/target_y must be expressed in the same frame as self.robot_pose.
-        """
-        rate = rospy.Rate(20)
-        while not rospy.is_shutdown():
-            rospy.logdebug("head_to_target loop")
-            if self.robot_pose is None:
-                rate.sleep()
-                continue
-
-            px = self.robot_pose.position.x
-            py = self.robot_pose.position.y
-            q = self.robot_pose.orientation
-            _, _, yaw = euler_from_quaternion([q.x, q.y, q.z, q.w])
-
-            desired_yaw = math.atan2(target_y - py, target_x - px)
-            err = self._angle_diff(desired_yaw, yaw)
-
-            if abs(err) < yaw_tolerance:
-                self.stop_robot()   # ensure robot is not drifting
-                return True
-
-            cmd = Twist()
-            cmd.linear.x = 0.0  # rotate in place only
-            # P controller on yaw error, saturate
-            cmd.angular.z = max(-0.6, min(0.6, 1.5 * err))
-            self.cmd_vel.publish(cmd)
-            rate.sleep()
-
-    def drive_to_target(self, target_x, target_y, fraction=1.0):
-        """Drive toward the target (target expressed in same frame as self.robot_pose).
-        fraction optionally moves toward a fractional point between current pose and target.
-        """
-        rate = rospy.Rate(20)
-        while not rospy.is_shutdown():
-            rospy.logdebug("drive_to_target loop")
-            if self.robot_pose is None:
-                rate.sleep()
-                continue
-
-            px = self.robot_pose.position.x
-            py = self.robot_pose.position.y
-            q = self.robot_pose.orientation
-            _, _, yaw = euler_from_quaternion([q.x, q.y, q.z, q.w])
-
-            # vector from robot to (possibly scaled) target
-            dx = (target_x - px) * fraction
-            dy = (target_y - py) * fraction
-            dist = math.hypot(dx, dy)
-
-            if dist < 0.01:
-                self.stop_robot()
-                return True
-
-            # desired yaw in same frame as yaw
-            desired_yaw = math.atan2(dy, dx)
-            heading_err = self._angle_diff(desired_yaw, yaw)  # normalized to [-pi,pi]
-
-            cmd = Twist()
-
-            # If the heading error is large, rotate in place (no forward)
-            heading_threshold = 0.25  # radians (~14 degrees). tune as needed
-            if abs(heading_err) > heading_threshold:
-                cmd.linear.x = 0.0
-            else:
-                # Move forward scaled by distance and reduced by heading error
-                # Use cos(heading_err) to reduce forward when slightly off-angle
-                linear_speed = 0.6 * dist
-                linear_speed *= math.cos(heading_err)  # reduces when off-angle
-                # clamp to [0, 0.15] (tuned smaller to be safer)
-                cmd.linear.x = max(0.0, min(0.15, linear_speed))
-
-            # angular controller
-            cmd.angular.z = max(-0.6, min(0.6, 2.0 * heading_err))
-
-            self.cmd_vel.publish(cmd)
-            rate.sleep()
-
-    
-    @staticmethod
-    def _angle_diff(a, b):
-        """Normalize angle difference to [-pi, pi]."""
-        d = a - b
-        while d > math.pi:
-            d -= 2.0 * math.pi
-        while d < -math.pi:
-            d += 2.0 * math.pi
-        return d
-    
     # Navigate to detected object with offset
-    def navigate_to_object(self, object: Literal["object", "table"], move_base: bool=True, fraction = 1.0):
+    def navigate_to_object(self, object: Literal["object", "table"], move_base: bool=True):
         if object == "object":
             rospy.loginfo("Navigating to detected object...")
             obj = self.object.copy()
@@ -284,53 +194,46 @@ class PickPlaceManager:
         goal = MoveBaseGoal()
         goal.target_pose.header.frame_id = "map"
         goal.target_pose.header.stamp = rospy.Time.now()
-        target_pose_map = PoseStamped()
-        target_pose_map.header.frame_id = "map"
-        target_pose_map.header.stamp = rospy.Time.now()
-        target_pose_map.pose.position.x = obj['position']["x"]
-        target_pose_map.pose.position.y = obj['position']["y"]
-        target_pose_map.pose.orientation.w = 1.0  # Identity orientation for the point
+        target_pose = PoseStamped()
+        target_pose.header.frame_id = obj["frame_id"]
+        target_pose.header.stamp = rospy.Time.now()
+        target_pose.pose.position.x = obj['position']["x"]
+        target_pose.pose.position.y = obj['position']["y"]
+        target_pose.pose.orientation.w = 1.0  # Identity orientation for the point
         try:
-            # transform map->odom to compute target in odom frame
-            transform = self.tf_buffer.lookup_transform("odom", "map", rospy.Time(0), rospy.Duration(1.0))
-            target_pose_odom = tf2_geometry_msgs.do_transform_pose(target_pose_map, transform)
+            transform = self.tf_buffer.lookup_transform("map", obj["frame_id"], rospy.Time(0), rospy.Duration(1.0))
+            target_pose_map = tf2_geometry_msgs.do_transform_pose(target_pose, transform)
+            transform = self.tf_buffer.lookup_transform("map", self.robot_pose.header.frame_id, rospy.Time(0), rospy.Duration(1.0))
+            robot_pose_map = tf2_geometry_msgs.do_transform_pose(self.robot_pose.pose, transform)
         except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException) as e:
             rospy.logerr(f"Failed to transform target pose: {e}")
             return False
-
-        raw_x = target_pose_odom.pose.position.x
-        raw_y = target_pose_odom.pose.position.y
-        robot_x = self.robot_pose.position.x
-        robot_y = self.robot_pose.position.y
-
-        dx = raw_x - robot_x
-        dy = raw_y - robot_y
-        dist_to_target = math.hypot(dx, dy)
-        offset = 0.04
-        if dist_to_target > offset:
-            ratio = (dist_to_target - offset) / dist_to_target
-            target_x = robot_x + dx * ratio
-            target_y = robot_y + dy * ratio
-        else:
-            target_x = raw_x
-            target_y = raw_y
-
+        
+        target_x = target_pose_map.pose.position.x
+        target_y = target_pose_map.pose.position.y
+        robot_x = robot_pose_map.pose.position.x
+        robot_y = robot_pose_map.pose.position.y
+        dx = target_x - robot_x
+        dy = target_y - robot_y
+        d = math.hypot(dx, dy)
+        heading = math.atan2(dy, dx)
+        q1, q2, q3, q4 = quaternion_from_euler(0, 0, heading)
         if move_base:
-            # IMPORTANT: target_x/target_y are in the odom frame, so set frame_id accordingly.
+            factor = 0.32 / d
+            target_x = robot_x + dx * factor
+            target_y = robot_y + dy * factor
             goal = MoveBaseGoal()
-            goal.target_pose.header.frame_id = "odom"               # <-- was "map" (bug)
+            goal.target_pose.header.frame_id = "map"
             goal.target_pose.header.stamp = rospy.Time.now()
             goal.target_pose.pose.position.x = target_x
             goal.target_pose.pose.position.y = target_y
             goal.target_pose.pose.position.z = 0.0
-            # if you want the orientation in map frame, you must transform it; for now we keep obj orientation (may be in map)
-            goal.target_pose.pose.orientation.x = obj['orientation']["x"]
-            goal.target_pose.pose.orientation.y = obj['orientation']["y"]
-            goal.target_pose.pose.orientation.z = obj['orientation']["z"]
-            goal.target_pose.pose.orientation.w = obj['orientation']["w"]
-
+            goal.target_pose.pose.orientation.x = q1
+            goal.target_pose.pose.orientation.y = q2
+            goal.target_pose.pose.orientation.z = q3
+            goal.target_pose.pose.orientation.w = q4
             self.move_base_actions.send_goal(goal)
-            rospy.loginfo("Navigation goal published (offset 5 cm) in odom frame")
+            rospy.loginfo("Navigation goal published (offset 32 cm) in odom frame")
             finished = self.move_base_actions.wait_for_result(rospy.Duration(60.0))
             if not finished:
                 rospy.logwarn("Timed out achieving goal, canceling.")
@@ -341,16 +244,21 @@ class PickPlaceManager:
             return True
 
         else:
-            rospy.loginfo("Sending velocity commands towards target (odom frame)")
-            if not self.head_to_target(target_x, target_y):
-                rospy.logwarn("Failed to orient toward target")
-                return False
-            success = self.drive_to_target(target_x, target_y, fraction)
-            if success:
-                rospy.loginfo("Reached target (cmd_vel).")
-            else:
-                rospy.logwarn("Failed to reach target (cmd_vel).")
-            return success
+            rospy.loginfo("Sending velocity commands directly towards target")
+            d_traveled = 0
+            while not rospy.is_shutdown():
+                cmd = Twist()
+                cmd.linear.x = 0.02
+                cmd.angular.z = 0.0
+                self.cmd_vel.publish(cmd)
+                rospy.sleep(20)
+                d_traveled += 1.1*0.02*20
+                if d_traveled - d > 0.05:
+                    self.stop_robot()
+                    rospy.loginfo("Reached target (cmd_vel).")
+                    return True
+            rospy.logwarn("Failed to reach target (cmd_vel).")
+            return False
     
     def pick_object(self):
         rospy.loginfo("Picking up the object...")
@@ -399,12 +307,12 @@ class PickPlaceManager:
         self.stop_search()
         # Step 3: add object to scene
         self.clear_octomap()
-        self.navigate_to_object("object", fraction=0.2)
+        self.navigate_to_object("object", move_base=True)
         if not self.add_to_scene("object"):
             response.message = "Failed to add object to its planning scene, mission is cancelled!"
             return response
         # Step 4: navigate to object
-        if not self.navigate_to_object("object"):
+        if not self.navigate_to_object("object", move_base=False):
             response.message = "Failed to navigate to object, mission is cancelled!"
             return response
         # Step 5: pick object
@@ -424,12 +332,12 @@ class PickPlaceManager:
         self.stop_search()
         # Step 9: add table to scene
         self.clear_octomap()
-        self.navigate_to_object("table", fraction=0.2)
+        self.navigate_to_object("table", move_base=True)
         if not self.add_to_scene("table"):
             response.message = "Failed to add table to the planning scene, mission is cancelled!"
             return response
         # Step 10: navigate to table
-        if not self.navigate_to_object("table"):
+        if not self.navigate_to_object("table", move_base=False):
             response.message = "Failed to approach table, mission is cancelled!"
             return response
         # Step 11: place object
