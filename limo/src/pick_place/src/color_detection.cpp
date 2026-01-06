@@ -52,8 +52,7 @@ public:
         mask_image_pub_ = it_.advertise("/detection/mask_image", 1);
         
         // Subscribe to camera info
-        camera_info_sub_ = nh_.subscribe("/camera/color/camera_info", 1, 
-                                         &DynamicColorDetector::cameraInfoCallback, this);
+        camera_info_sub_ = nh_.subscribe("/camera/color/camera_info", 1, &DynamicColorDetector::cameraInfoCallback, this);
         
         // Setup synchronized subscribers
         rgb_sub_.subscribe(nh_, "/camera/color/image_raw", 1);
@@ -95,6 +94,7 @@ private:
     bool show_debug_image_;
     int blur_kernel_size_;
     int morph_kernel_size_;
+    int ellipse_kernel_size_;
     double min_box_size_;
     double max_box_size_;
     double min_depth_;
@@ -111,7 +111,6 @@ private:
     
     std::string objects_path_;
     int hsv_tolerance_;
-    int saturation_min_;
     int value_min_;
     
     // Object template
@@ -120,6 +119,8 @@ private:
         cv::Scalar hsv_lower;
         cv::Scalar hsv_upper;
         cv::Scalar viz_color;
+        int adaptive_sat_min;
+        double area;
         double aspect_ratio;
         double aspect_ratio_min;
         double aspect_ratio_max;
@@ -162,6 +163,7 @@ private:
         max_box_size_ = nh_.param(node_name + "/max_box_size", 1.0);
         blur_kernel_size_ = nh_.param(node_name + "/blur_kernel_size", 5);
         morph_kernel_size_ = nh_.param(node_name + "/morph_kernel_size", 3);
+        ellipse_kernel_size_ = nh_.param(node_name + "/ellipse_kernel_size", 3);
         min_depth_ = nh_.param(node_name + "/min_depth", 0.3);
         max_depth_ = nh_.param(node_name + "/max_depth", 3.0);
         fallback_depth_ = nh_.param(node_name + "/fallback_depth", 0.5);
@@ -169,7 +171,6 @@ private:
         
         objects_path_ = nh_.param(node_name + "/objects_path", std::string(""));
         hsv_tolerance_ = nh_.param(node_name + "/hsv_tolerance", 15);
-        saturation_min_ = nh_.param(node_name + "/saturation_min", 40);
         value_min_ = nh_.param(node_name + "/value_min", 40);
         
         // Scoring weights (sum should be 1.0)
@@ -238,13 +239,14 @@ private:
             if (processReferenceImage(png_path.string(), obj_template))
             {
                 object_templates_.push_back(obj_template);
-                ROS_INFO("  [%zu] %s: H=%.0f±%d, S>%d, V>%d, AR=%.2f±%.2f",
+                ROS_INFO("  [%zu] %s: H=%.0f±%d, S>%d, V>%d, A=%.2f, AR=%.2f±%.2f",
                          object_templates_.size(),
                          obj_template.name.c_str(),
                          obj_template.expected_hue,
                          hsv_tolerance_,
-                         saturation_min_,
+                         obj_template.adaptive_sat_min,
                          value_min_,
+                         obj_template.area,
                          obj_template.aspect_ratio,
                          aspect_ratio_tolerance_);
             }
@@ -265,7 +267,7 @@ private:
         fs::path p(image_path);
         obj_template.name = p.stem().string();
         obj_template.reference_image = img.clone();
-        
+        obj_template.area = img.cols * img.rows;
         obj_template.aspect_ratio = static_cast<double>(img.cols) / img.rows;
         obj_template.aspect_ratio_min = obj_template.aspect_ratio * (1.0 - aspect_ratio_tolerance_);
         obj_template.aspect_ratio_max = obj_template.aspect_ratio * (1.0 + aspect_ratio_tolerance_);
@@ -276,7 +278,26 @@ private:
         std::vector<cv::Mat> hsv_channels;
         cv::split(hsv, hsv_channels);
         
-        cv::Mat mask = (hsv_channels[1] > saturation_min_) & (hsv_channels[2] > value_min_);
+        cv::Mat loose_mask = (hsv_channels[2] > value_min_);
+        std::vector<uchar> sat_vals;
+        for (int r = 0; r < hsv.rows; ++r)
+        {
+            const uchar* s = hsv_channels[1].ptr<uchar>(r);
+            const uchar* m = loose_mask.ptr<uchar>(r);
+            for (int c = 0; c < hsv.cols; ++c)
+            {
+                if (m[c])
+                    sat_vals.push_back(s[c]);
+            }
+        }
+        std::nth_element(sat_vals.begin(), sat_vals.begin() + sat_vals.size() / 3, sat_vals.end());
+        double sat_ref = sat_vals[sat_vals.size() / 3];
+        int adaptive_sat_min = static_cast<int>(sat_ref * 0.8);
+        adaptive_sat_min = std::max(20, adaptive_sat_min);
+        adaptive_sat_min = std::min(200, adaptive_sat_min);
+        obj_template.adaptive_sat_min = adaptive_sat_min;
+
+        cv::Mat mask = (hsv_channels[1] >= adaptive_sat_min) & (hsv_channels[2] >= value_min_);
         
         int hist_size = 180;
         float h_ranges[] = {0, 180};
@@ -300,7 +321,7 @@ private:
         int h_lower = std::max(0, dominant_hue - hsv_tolerance_);
         int h_upper = std::min(179, dominant_hue + hsv_tolerance_);
         
-        obj_template.hsv_lower = cv::Scalar(h_lower, saturation_min_, value_min_);
+        obj_template.hsv_lower = cv::Scalar(h_lower, adaptive_sat_min, value_min_);
         obj_template.hsv_upper = cv::Scalar(h_upper, 255, 255);
         
         cv::Mat dominant_color_hsv(1, 1, CV_8UC3, cv::Scalar(dominant_hue, 200, 200));
@@ -324,77 +345,198 @@ private:
             cx_ = msg->K[2];
             cy_ = msg->K[5];
             camera_info_received_ = true;
-            
-            ROS_INFO("Camera parameters updated: fx=%.1f, fy=%.1f, cx=%.1f, cy=%.1f", 
-                     fx_, fy_, cx_, cy_);
+            ROS_INFO("Camera parameters updated: fx=%.1f, fy=%.1f, cx=%.1f, cy=%.1f", fx_, fy_, cx_, cy_);
         }
     }
 
-    double calculateConfidence(const DetectionCandidate& candidate, const ObjectTemplate& obj_template, const cv::Mat& hsv_roi)
+    // Helper: circular hue distance (h values in 0..179)
+    int hueDistance(int h1, int h2) {
+        int d = abs(h1 - h2);
+        return std::min(d, 180 - d);
+    }
+
+    // Helper: check if detected bbox is near image border
+    bool touchesImageBorder(const cv::Rect& roi, int img_w, int img_h, int margin = 2)
     {
-        double color_score = 0.0;
-        double aspect_ratio_score = 0.0;
-        double area_score = 0.0;
-        double depth_quality_score = 0.0;
-        
+        return (roi.x <= margin || roi.y <= margin || roi.x + roi.width  >= img_w - margin || roi.y + roi.height >= img_h - margin);
+    }
+
+    // Create a robust color mask for a template
+    cv::Mat createRobustColorMask(const cv::Mat& hsv, const cv::Scalar& hsv_center, int hue_tol,
+                                int sat_min, int val_min, int blur_ksize, int morph_ksize)
+    {
+        // hsv is CV_8UC3 (H:0-179, S:0-255, V:0-255)
+        CV_Assert(hsv.type() == CV_8UC3);
+
+        // Split channels
+        std::vector<cv::Mat> ch;
+        cv::split(hsv, ch);
+        cv::Mat H = ch[0], S = ch[1], V = ch[2];
+
+        // Preprocess V: CLAHE to reduce illumination variation
+        cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE(2.0, cv::Size(8,8));
+        cv::Mat V_clahe;
+        clahe->apply(V, V_clahe);
+
+        // Merge quick processed HSV for blur
+        std::vector<cv::Mat> merged = { H, S, V_clahe };
+        cv::Mat hsv_proc;
+        cv::merge(merged, hsv_proc);
+        if (blur_ksize > 1) {
+            cv::GaussianBlur(hsv_proc, hsv_proc, cv::Size(blur_ksize, blur_ksize), 0);
+            cv::split(hsv_proc, merged);
+            H = merged[0]; S = merged[1]; V_clahe = merged[2];
+        }
+
+        // Per-pixel test using hue circular distance and sat/val thresholds
+        cv::Mat mask = cv::Mat::zeros(H.size(), CV_8UC1);
+        int target_h = static_cast<int>(hsv_center[0] + 0.5);
+        for (int r = 0; r < H.rows; ++r) {
+            const uchar* Hp = H.ptr<uchar>(r);
+            const uchar* Sp = S.ptr<uchar>(r);
+            const uchar* Vp = V_clahe.ptr<uchar>(r);
+            uchar* Mp = mask.ptr<uchar>(r);
+            for (int c = 0; c < H.cols; ++c) {
+                int hval = Hp[c];
+                if (Sp[c] < sat_min || Vp[c] < val_min) {
+                    Mp[c] = 0;
+                    continue;
+                }
+                if (hueDistance(hval, target_h) <= hue_tol) {
+                    Mp[c] = 255;
+                } else {
+                    Mp[c] = 0;
+                }
+            }
+        }
+
+        // Morphology to clean up
+        if (morph_ksize > 0) {
+            cv::Mat kernel = cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(morph_ksize, morph_ksize));
+            cv::morphologyEx(mask, mask, cv::MORPH_CLOSE, kernel);
+            cv::morphologyEx(mask, mask, cv::MORPH_OPEN, kernel);
+        }
+
+        return mask;
+    }
+
+    // Edge detection for contours
+    cv::Mat enhanceMaskBoundaries(const cv::Mat& mask)
+    {
+        // Strategy: Use dilation difference to sharpen edges
+        // dilated - original = edge region
+        cv::Mat kernel = cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(ellipse_kernel_size_, ellipse_kernel_size_));
+        cv::Mat dilated;
+        cv::dilate(mask, dilated, kernel, cv::Point(-1, -1), 1);
+        // Edge pixels = where dilation adds new white
+        cv::Mat edge_region = dilated - mask;
+        // Strengthen boundaries by combining edge region with original
+        cv::Mat enhanced = mask + (0.25 * edge_region);  // Add back 25% of edge region
+        enhanced = cv::min(enhanced, 255);  // Clip to [0, 255]
+        return enhanced;
+    }
+
+    // Color scoring: percent of pixels inside mask + histogram backprojection refinement
+    double computeColorScore(const cv::Mat& hsv_roi, const cv::Mat& mask, const cv::Scalar& hsv_center)
+    {
+        // 1) fraction of good pixels
+        double total = hsv_roi.rows * hsv_roi.cols;
+        double good = static_cast<double>(cv::countNonZero(mask));
+        double frac = (total > 0.0) ? (good / total) : 0.0;
+
+        // 2) histogram backprojection (H channel only) for finer matching
+        std::vector<cv::Mat> ch;
+        cv::split(hsv_roi, ch);
+        cv::Mat H = ch[0];
+        int h_center = static_cast<int>(hsv_center[0] + 0.5);
+
+        // Build small 1D histogram around target hue
+        int bins = 16;
+        cv::Mat hist;
+        int ranges[] = {0,180};
+        int histSize[] = {bins};
+        const int* histSizes = histSize;
+        const float hrange[] = {0.f, 180.f};
+        const float* rangesPtr[] = { hrange };
+        cv::calcHist(&H, 1, 0, cv::Mat(), hist, 1, histSize, rangesPtr, true, false);
+
+        // We expect more mass near the target hue. Compute normalized backprojection score:
+        cv::Mat backproj;
+        cv::calcBackProject(&H, 1, 0, hist, backproj, rangesPtr);
+        // backproj values scaled 0..255, compute mean in masked area
+        cv::Scalar mean_bp = cv::mean(backproj, mask);
+        double bp_score = (mean_bp[0] / 255.0); // 0..1
+
+        // Combine: more weight to fraction for robustness, but BP refines intensity
+        double score = 0.7 * frac + 0.3 * bp_score;
+        return score;
+    }
+
+    // AR soft score
+    double aspectRatioScore(double ar, double ar_ref, double sigma = 0.35)
+    {
+        double err = std::abs(ar - ar_ref) / ar_ref;
+        return std::exp(-(err * err) / (2.0 * sigma * sigma));
+    }
+
+    // Area score
+    double areaScore(double median_depth, double area, double ref_area)
+    {
+        double expected_area = ref_area *std::pow(min_depth_ / median_depth, 2); // Hard estimation, ref image is taken at min depth
+        double area_ratio = area / expected_area;
+        return std::exp(-std::pow(std::log(area_ratio), 2) / (2 * 0.5 * 0.5));
+    }
+
+    // Depth quality: use median depth and low variance
+    double depthQualityFromMask(const cv::Mat& depth_roi)
+    {
+        std::vector<float> depths;
+        // Filter valid depth values
+        for(int r = 0; r < depth_roi.rows; ++r){
+            const uint16_t* dp = depth_roi.ptr<uint16_t>(r);
+            for(int c = 0; c < depth_roi.cols; ++c){
+                uint16_t d_mm = dp[c];
+                if(d_mm > min_depth_*1000 && d_mm < max_depth_*1000) {
+                    float d_m = d_mm / 1000.0f;  // Convert to meters
+                    depths.push_back(d_m);
+                }
+            }
+        }
+        if(depths.empty()) return 0.0;
+        std::sort(depths.begin(), depths.end());
+        double median = depths[depths.size() / 2];
+        // Trim outliers (top 5%)
+        size_t outlier_idx = static_cast<size_t>(depths.size() * 0.95);
+        std::vector<float> trimmed(depths.begin(), depths.begin() + outlier_idx);
+        if(trimmed.empty()) return 0.0;
+        double mean = 0;
+        for(double v : trimmed) mean += v;
+        mean /= trimmed.size();
+        double var = 0;
+        for(double v : trimmed) var += (v - mean) * (v - mean);
+        var /= trimmed.size();
+        double sd = std::sqrt(var);
+        double q = std::max(0.0, 1.0 - (sd / std::max(0.01, median * 0.5))); // quality matrix
+        return std::min(1.0, std::max(0.0, q));
+    }
+
+    double calculateConfidence(const DetectionCandidate& candidate, const ObjectTemplate& obj_template,
+                            const cv::Mat& hsv_roi, const cv::Mat& mask_roi, const cv::Mat& depth_roi)
+    {
         // 1. Color matching score (HSV histogram comparison)
-        std::vector<cv::Mat> hsv_channels;
-        cv::split(hsv_roi, hsv_channels);
-        
-        cv::Mat mask = (hsv_channels[1] > saturation_min_) & (hsv_channels[2] > value_min_);
-        
-        if (cv::countNonZero(mask) > 0)
-        {
-            cv::Scalar mean_hsv = cv::mean(hsv_roi, mask);
-            double hue_diff = std::abs(mean_hsv[0] - obj_template.expected_hue);
-            
-            // Handle hue wrap-around (red crosses 0/180 boundary)
-            if (hue_diff > 90)
-                hue_diff = 180 - hue_diff;
-            
-            // Score: 1.0 at perfect match, decreases linearly to 0 at tolerance boundary
-            color_score = std::max(0.0, 1.0 - (hue_diff / hsv_tolerance_));
-        }
-        
+        double color_score = computeColorScore(hsv_roi, mask_roi, obj_template.hsv_lower);
         // 2. Aspect ratio matching score
-        double ar_diff = std::abs(candidate.aspect_ratio - obj_template.aspect_ratio);
-        double ar_tolerance_abs = obj_template.aspect_ratio * aspect_ratio_tolerance_;
-        aspect_ratio_score = std::max(0.0, 1.0 - (ar_diff / ar_tolerance_abs));
-        
+        double aspect_ratio_score = aspectRatioScore(candidate.aspect_ratio, obj_template.aspect_ratio, aspect_ratio_tolerance_);
         // 3. Area confidence (prefer medium-sized detections)
-        double area = candidate.bbox.area();
-        double normalized_area = area / max_contour_area_;
-        
-        // Gaussian curve: best at 30% of max area, decreases towards min and max
-        double optimal_normalized_area = 0.3;
-        double area_variance = 0.2;
-        area_score = std::exp(-std::pow(normalized_area - optimal_normalized_area, 2) / (2 * area_variance * area_variance));
-        
+        double area_score = areaScore(candidate.depth, candidate.bbox.area(), obj_template.area);
         // 4. Depth quality score
-        if (candidate.depth > min_depth_ && candidate.depth < max_depth_)
-        {
-            // Good depth: score based on how "reasonable" the depth is
-            // Prefer depths in working range (0.3m - 1.5m)
-            if (candidate.depth >= 0.3 && candidate.depth <= 1.5)
-                depth_quality_score = 1.0;
-            else if (candidate.depth < 0.3)
-                depth_quality_score = candidate.depth / 0.3;  // Closer = lower score
-            else
-                depth_quality_score = std::max(0.0, 1.0 - (candidate.depth - 1.5) / 3.5);
-        }
-        else
-        {
-            // Invalid or fallback depth
-            depth_quality_score = 0.3;  // Low but non-zero
-        }
-        
+        double depth_quality_score = depthQualityFromMask(depth_roi);
         // Weighted combination
         double total_confidence = 
             color_score * color_match_weight_ +
             aspect_ratio_score * aspect_ratio_weight_ +
             area_score * area_weight_ +
             depth_quality_score * depth_quality_weight_;
-        
         return total_confidence;
     }
 
@@ -464,8 +606,14 @@ private:
         {
             const auto& obj_template = object_templates_[template_idx];
             
-            cv::Mat mask;
-            cv::inRange(hsv_image, obj_template.hsv_lower, obj_template.hsv_upper, mask);
+            cv::Mat mask = createRobustColorMask(
+                hsv_image,
+                (obj_template.hsv_lower + obj_template.hsv_upper) * 0.5, // use center as scalar
+                hsv_tolerance_,
+                obj_template.adaptive_sat_min,
+                value_min_,
+                blur_kernel_size_,
+                morph_kernel_size_);
             
             if (morph_kernel_size_ > 0)
             {
@@ -473,11 +621,11 @@ private:
                 cv::morphologyEx(mask, mask, cv::MORPH_CLOSE, kernel);
                 cv::morphologyEx(mask, mask, cv::MORPH_OPEN, kernel);
             }
-            
             cv::bitwise_or(combined_mask, mask, combined_mask);
             
             std::vector<std::vector<cv::Point>> contours;
-            cv::findContours(mask, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
+            cv::Mat enhanced_mask = enhanceMaskBoundaries(mask);
+            cv::findContours(enhanced_mask, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
             
             for (const auto& contour : contours)
             {
@@ -486,50 +634,47 @@ private:
                 if (area >= min_contour_area_ && area <= max_contour_area_)
                 {
                     cv::Rect bbox = cv::boundingRect(contour);
+                    bbox &= cv::Rect(0, 0, debug_image.cols, debug_image.rows);
+                    if (touchesImageBorder(bbox, debug_image.cols, debug_image.rows))
+                        continue; // Hard rejection if bounding box is near image edges
                     double aspect_ratio = static_cast<double>(bbox.width) / bbox.height;
-                    
-                    if (aspect_ratio >= obj_template.aspect_ratio_min && 
-                        aspect_ratio <= obj_template.aspect_ratio_max)
+                    // Create a detection candidate
+                    DetectionCandidate candidate;
+                    candidate.template_idx = template_idx;
+                    candidate.bbox = bbox;
+                    candidate.center = cv::Point2f(bbox.x + bbox.width/2.0f, bbox.y + bbox.height/2.0f);
+                    candidate.aspect_ratio = aspect_ratio;
+                    candidate.depth = getMedianDepth(cv_depth->image, bbox);
+                    // Handle invalid depth
+                    if (candidate.depth < min_depth_ || candidate.depth > max_depth_)
                     {
-                        DetectionCandidate candidate;
-                        candidate.template_idx = template_idx;
-                        candidate.bbox = bbox;
-                        candidate.center = cv::Point2f(bbox.x + bbox.width/2.0f, bbox.y + bbox.height/2.0f);
-                        candidate.aspect_ratio = aspect_ratio;
-                        candidate.depth = getMedianDepth(cv_depth->image, bbox);
-                        
-                        // Handle invalid depth
-                        if (candidate.depth < min_depth_ || candidate.depth > max_depth_)
-                        {
-                            if (use_fallback_depth_)
-                                candidate.depth = fallback_depth_;
-                            else
-                                continue;
-                        }
-                        
-                        // Calculate 3D position
-                        candidate.x = (candidate.center.x - cx_) * candidate.depth / fx_;
-                        candidate.y = (candidate.center.y - cy_) * candidate.depth / fy_;
-                        candidate.z = candidate.depth;
-                        
-                        // Estimate dimensions
-                        candidate.width = (bbox.width * candidate.depth) / fx_;
-                        candidate.height = (bbox.height * candidate.depth) / fy_;
-                        candidate.box_depth = std::min(candidate.width, candidate.height) * 0.8;
-                        
-                        candidate.width = std::max(min_box_size_, std::min(max_box_size_, candidate.width));
-                        candidate.height = std::max(min_box_size_, std::min(max_box_size_, candidate.height));
-                        candidate.box_depth = std::max(min_box_size_, std::min(max_box_size_, candidate.box_depth));
-                        
-                        // Extract HSV ROI for color scoring
-                        cv::Rect safe_bbox = bbox & cv::Rect(0, 0, hsv_image.cols, hsv_image.rows);
-                        cv::Mat hsv_roi = hsv_image(safe_bbox);
-                        
-                        // Calculate confidence score
-                        candidate.confidence = calculateConfidence(candidate, obj_template, hsv_roi);
-                        
-                        candidates_per_template[template_idx].push_back(candidate);
+                        if (use_fallback_depth_)
+                            candidate.depth = fallback_depth_;
+                        else
+                            continue;
                     }
+                    // Calculate 3D position
+                    candidate.x = (candidate.center.x - cx_) * candidate.depth / fx_;
+                    candidate.y = (candidate.center.y - cy_) * candidate.depth / fy_;
+                    candidate.z = candidate.depth;
+                    // Estimate dimensions
+                    candidate.width = (bbox.width * candidate.depth) / fx_;
+                    candidate.height = (bbox.height * candidate.depth) / fy_;
+                    candidate.box_depth = std::min(candidate.width, candidate.height) * 0.8;
+                    candidate.width = std::max(min_box_size_, std::min(max_box_size_, candidate.width));
+                    candidate.height = std::max(min_box_size_, std::min(max_box_size_, candidate.height));
+                    candidate.box_depth = std::max(min_box_size_, std::min(max_box_size_, candidate.box_depth));
+                    // Extract HSV ROI, mask ROI and depth ROI for scoring
+                    cv::Rect safe_bbox_hsv = bbox & cv::Rect(0, 0, hsv_image.cols, hsv_image.rows);
+                    cv::Mat hsv_roi = hsv_image(safe_bbox_hsv);
+                    cv::Rect safe_bbox_mask = bbox & cv::Rect(0, 0, enhanced_mask.cols, enhanced_mask.rows);
+                    cv::Mat mask_roi = enhanced_mask(safe_bbox_mask);
+                    cv::Rect safe_bbox_depth = bbox & cv::Rect(0, 0, cv_depth->image.cols, cv_depth->image.rows);
+                    cv::Mat depth_roi = cv_depth->image(safe_bbox_depth);
+                    // Calculate confidence score
+                    candidate.confidence = calculateConfidence(candidate, obj_template, hsv_roi, mask_roi, depth_roi);
+                    // Add to candidate list
+                    candidates_per_template[template_idx].push_back(candidate);
                 }
             }
         }
