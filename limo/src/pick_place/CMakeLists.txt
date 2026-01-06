@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 3.0.2)
 project(pick_place)
+# cmake_policy(SET CMP0054 NEW)
 
 ## Compile as C++11, supported in ROS Kinetic and newer
 # add_compile_options(-std=c++11)
@@ -30,6 +31,7 @@ find_package(Eigen3 REQUIRED)
 find_package(PCL REQUIRED)
 find_package(OpenCV REQUIRED)
 find_package(Boost REQUIRED COMPONENTS filesystem system)
+find_package(gazebo REQUIRED)
 
 ## Uncomment this if the package has a setup.py. This macro ensures
 ## modules and global scripts declared therein get installed
@@ -133,12 +135,15 @@ include_directories(
   ${PCL_INCLUDE_DIRS}
   ${OpenCV_INCLUDE_DIRS}
   ${Boost_INCLUDE_DIRS}
+  ${GAZEBO_INCLUDE_DIRS}
 )
 
-## Declare a C++ library
-# add_library(${PROJECT_NAME}
-#   src/${PROJECT_NAME}/pick_place.cpp
-# )
+# Declare a C++ library
+if(NOT TARGET UUID::UUID)
+  add_library(UUID::UUID INTERFACE IMPORTED)
+  target_link_libraries(UUID::UUID INTERFACE uuid)
+endif()
+add_library(CollisionActorPlugin SHARED src/CollisionActorPlugin.cc)
 
 ## Add cmake target dependencies of the library
 ## as an example, code may need to be generated before libraries
@@ -164,6 +169,7 @@ add_executable(color_detection src/color_detection.cpp)
 ## Specify libraries to link a library or executable target against
 target_link_libraries(pick_place ${catkin_LIBRARIES} ${Boost_LIBRARIES} ${PCL_LIBRARIES})
 target_link_libraries(color_detection ${catkin_LIBRARIES} ${Boost_LIBRARIES} ${OpenCV_LIBRARIES})
+target_link_libraries(CollisionActorPlugin ${GAZEBO_LIBRARIES} ${roscpp_LIBRARIES} uuid)
 
 #############
 ## Install ##

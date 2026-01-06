@@ -67,6 +67,7 @@
   <depend>opencv</depend>
   <build_export_depend>eigen</build_export_depend>
   <exec_depend>message_runtime</exec_depend>
+  <exec_depend>gazebo</exec_depend>
 
   <!-- The export tag contains other, unspecified, tags -->
   <export>
