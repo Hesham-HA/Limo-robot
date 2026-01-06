@@ -4,9 +4,9 @@ services:
     container_name: noetic
     volumes:
       # Workspaces for ROS
-      - ${PWD}/ros_basics:/home/ros-noetic/ros_basics
-      - ${PWD}/limo:/home/ros-noetic/limo
-      - ${PWD}/.gazebo:/usr/share/gazebo-11/models
+      - ${PWD}/../ros_basics:/home/ros-noetic/ros_basics
+      - ${PWD}/../limo:/home/ros-noetic/limo
+      - ${PWD}/../.gazebo:/usr/share/gazebo-11/models
       # System configurations to use GUI
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
       - /dev/dri:/dev/dri:rw
@@ -27,8 +27,8 @@ services:
       - NVIDIA_VISIBLE_DEVICES=all
       - XDG_RUNTIME_DIR=/run/user/1000
       - NVIDIA_DRIVER_CAPABILITIES=compute,graphics,utility,display
-      # - __NV_PRIME_RENDER_OFFLOAD=1
-      # - __GLX_VENDOR_LIBRARY_NAME=nvidia
+      - __NV_PRIME_RENDER_OFFLOAD=1
+      - __GLX_VENDOR_LIBRARY_NAME=nvidia
     runtime: nvidia
     stdin_open: true
     tty: true
