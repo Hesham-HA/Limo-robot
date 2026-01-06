@@ -8,7 +8,7 @@
 
     <!-- Moveit -->
     <include file="$(dirname)/moveit.launch">
-        <arg name="use_rviz" value="false"/>
+        <arg name="use_rviz" value="true"/>
     </include>
 
     <!-- Pick and Place operations -->
@@ -17,6 +17,7 @@
     <!-- Mission Manager Node -->
     <node name="mission_manager" pkg="pick_place" type="manager.py" output="screen">
         <remap from="/object/detection" to="/detection/object"/>
+        <param name="local_planner" value="move_base/DWAPlannerROS"/>
     </node>
 
     <!--  **************** Visualisation ****************  -->
