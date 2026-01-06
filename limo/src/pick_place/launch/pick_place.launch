@@ -18,7 +18,7 @@
         <param name="grasp_link" value="joint6_flange" />
         
         <param name="use_perception" type="bool" value="false" />
-        <param name="bbox_scale_factor" value="0.95" />
+        <param name="bbox_scale_factor" value="0.9" />
 
         <!-- Defaults works well for these parameters -->
         <param name="plane_distance_threshold" value="0.015" />

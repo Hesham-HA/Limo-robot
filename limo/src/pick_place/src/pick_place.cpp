@@ -1023,7 +1023,16 @@ bool ObjectPickAndPlace::placeAndRelease(const geometry_msgs::PoseStamped& place
   arm_group_->setGoalJointTolerance(0.01);
   arm_group_->setGoalPositionTolerance(0.01);
   arm_group_->setGoalOrientationTolerance(0.02);
-  ROS_INFO(">>> STEP 1: Moving to pre-release position...");
+  ROS_INFO(">>> STEP 1: Moving to opening position...");
+  if (!returnToZero(top_grip_state_name_))
+  {
+    ROS_WARN("Failed to move to opening position! Trying to plan with current pose...");
+  }
+  else
+  {
+    ROS_INFO("Moved to opening position");
+  }
+  ROS_INFO(">>> STEP 2: Moving to pre-release position...");
   geometry_msgs::PoseStamped pre_place_pose = place_pose;
   pre_place_pose.pose.position.z += 0.1;
   arm_group_->setPoseTarget(pre_place_pose);
@@ -1033,7 +1042,7 @@ bool ObjectPickAndPlace::placeAndRelease(const geometry_msgs::PoseStamped& place
     return false;
   }
   ROS_INFO("Reached pre-release position");
-  ROS_INFO(">>> STEP 2: Planning downward descent trajectory...");
+  ROS_INFO(">>> STEP 3: Planning downward descent trajectory...");
   std::vector<geometry_msgs::Pose> waypoints;  
   // Start from post-release location
   geometry_msgs::Pose start_pose = pre_place_pose.pose;
@@ -1057,13 +1066,13 @@ bool ObjectPickAndPlace::placeAndRelease(const geometry_msgs::PoseStamped& place
   } else {
     ROS_INFO("Full Cartesian descent trajectory computed");
   }
-  ROS_INFO(">>> STEP 3: Executing downward descent...");
+  ROS_INFO(">>> STEP 4: Executing downward descent...");
   if (arm_group_->execute(trajectory) != moveit::core::MoveItErrorCode::SUCCESS) {
     ROS_ERROR("Failed to execute descent trajectory");
     return false;
   }
   ROS_INFO("Completed descent to table");
-  ROS_INFO(">>> STEP 4: Detaching object from gripper...");
+  ROS_INFO(">>> STEP 5: Detaching object from gripper...");
   moveit_msgs::AttachedCollisionObject aco;
   aco.link_name = grasp_link_name;
   aco.object.id = object_name_;
@@ -1071,18 +1080,18 @@ bool ObjectPickAndPlace::placeAndRelease(const geometry_msgs::PoseStamped& place
   planning_scene_interface_->applyAttachedCollisionObject(aco);
   ros::Duration(0.2).sleep();  // Let planning scene update
   ROS_INFO("Object detached");
-  ROS_INFO(">>> STEP 5: Opening gripper...");
+  ROS_INFO(">>> STEP 6: Opening gripper...");
   if (!openGripper())
   {
     ROS_ERROR("Failed to open gripper");
     return false;
   }
-  ROS_INFO(">>> STEP 6: Moving back to pre-place...");
+  ROS_INFO(">>> STEP 7: Moving back to pre-place...");
   geometry_msgs::PoseStamped retreat_pose = place_pose;
   retreat_pose.pose.position.x -= 0.05;
   arm_group_->setPoseTarget(retreat_pose);
   arm_group_->move();
-  ROS_INFO(">>> STEP 7: Returning to home position...");
+  ROS_INFO(">>> STEP 8: Returning to home position...");
   if (!returnToZero(zero_state_name_))
   {
     ROS_WARN("Failed to return to home, but object is placed");
