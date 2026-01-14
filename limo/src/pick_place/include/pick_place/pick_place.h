@@ -39,6 +39,12 @@ struct ObjectParams
   double center_pt[3];
 };
 
+// Structure to hold accumulated pose measurements
+struct PoseMeasurement {
+  double x, y, z;
+  ObjectParams params;
+  std::string shape_type;
+};
 
 class ObjectPickAndPlace
 {
@@ -99,6 +105,8 @@ public:
   void cloudCB(const sensor_msgs::PointCloud2ConstPtr& msg);
   
   void bboxCB(const visualization_msgs::MarkerArray::ConstPtr& msg);
+
+  PoseMeasurement averagePoseMeasurements(const std::vector<PoseMeasurement>& measurements);
 
   bool addObjectService(pick_place::AddObjectToScene::Request& req, pick_place::AddObjectToScene::Response& res);
 

@@ -120,6 +120,7 @@ bool ObjectPickAndPlace::addObjectService(pick_place::AddObjectToScene::Request&
 bool ObjectPickAndPlace::addObjectAsync(bool is_table, std::string& result_message)
 {
   std::string object_name = is_table ? table_name_ : object_name_;
+  bool use_perception = use_perception_; //is_table ? true : use_perception_;
   ROS_INFO("========================================");
   ROS_INFO("Add object service called for %s", object_name.c_str());
   
@@ -133,7 +134,7 @@ bool ObjectPickAndPlace::addObjectAsync(bool is_table, std::string& result_messa
   {
     ROS_INFO("Attempt %d/%d", attempt, max_retries);
     
-    if (use_perception_ && !has_cloud_)
+    if (use_perception && !has_cloud_)
     {
       if (attempt < max_retries)
       {
@@ -158,146 +159,172 @@ bool ObjectPickAndPlace::addObjectAsync(bool is_table, std::string& result_messa
       result_message = "No bounding box data available after " + std::to_string(max_retries) + " attempts";
       return false;
     }
-  
-    try
-    {
-      // Get bounding box
-      visualization_msgs::Marker bbox_marker;
-      for (const auto& marker : latest_bboxes_.markers)
-      {
-        if (marker.type == visualization_msgs::Marker::CUBE)
-        {
-          bbox_marker = marker;
-          break;
-        }
-      }
-      if (bbox_marker.type != visualization_msgs::Marker::CUBE)
-      {
-        result_message = "No valid bounding box marker found";
-        return false;
-      }
-      ROS_INFO("Bounding box center: [%.3f, %.3f, %.3f]", 
-              bbox_marker.pose.position.x, bbox_marker.pose.position.y, bbox_marker.pose.position.z);
-      ROS_INFO("Bounding box scale: [%.3f, %.3f, %.3f]", bbox_marker.scale.x, bbox_marker.scale.y, bbox_marker.scale.z);
 
-      // Extract object info
-      ObjectParams object_params;
-      // Filter by cloud or add object from detection only
-      if (use_perception_)
+    // Average pose measurements
+    std::vector<PoseMeasurement> pose_measurements;
+    for (int iteration = 1; iteration <= 5; iteration++)
+    {
+      try
       {
-        pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>);
-        pcl::fromROSMsg(*latest_cloud_, *cloud);
-        ROS_INFO("Original cloud has %zu points", cloud->points.size());
-        // Filter by bbox
-        filterPointCloudByBBox(cloud, bbox_marker);
-        ROS_INFO("After bbox filtering: %zu points", cloud->points.size());
-        if (cloud->points.empty())
+        // Get bounding box
+        visualization_msgs::Marker bbox_marker;
+        for (const auto& marker : latest_bboxes_.markers)
         {
-          result_message = "No points found in bounding box region";
+          if (marker.type == visualization_msgs::Marker::CUBE)
+          {
+            bbox_marker = marker;
+            break;
+          }
+        }
+        if (bbox_marker.type != visualization_msgs::Marker::CUBE)
+        {
+          result_message = "No valid bounding box marker found";
           return false;
         }
-        // Remove plane under object
-        double bbox_bottom = bbox_marker.pose.position.z - bbox_marker.scale.z / 2.0;
-        ROS_INFO("Bounding box bottom at Z=%.3fm", bbox_bottom);
-        bool skip_plane_removal = false;
-        if (bbox_bottom > 0.05)
+        ROS_INFO("Bounding box center: [%.3f, %.3f, %.3f]", 
+                bbox_marker.pose.position.x, bbox_marker.pose.position.y, bbox_marker.pose.position.z);
+        ROS_INFO("Bounding box scale: [%.3f, %.3f, %.3f]", bbox_marker.scale.x, bbox_marker.scale.y, bbox_marker.scale.z);
+
+        // Extract object info
+        ObjectParams object_params;
+        // Filter by cloud or add object from detection only
+        if (use_perception)
         {
-          ROS_INFO("Object is elevated (bottom > 5cm) - will skip aggressive plane removal");
-          skip_plane_removal = true;
-        }
-        removeOutliers(cloud);
-        ROS_INFO("After outlier removal: %zu points", cloud->points.size());
-        pcl::PointCloud<pcl::Normal>::Ptr cloud_normals(new pcl::PointCloud<pcl::Normal>);
-        computeNormals(cloud, cloud_normals);
-        pcl::PointIndices::Ptr inliers_plane(new pcl::PointIndices);
-        if (!skip_plane_removal && cloud->points.size() > 1000)
-        {
-          removePlaneSurface(cloud, inliers_plane);
-          extractNormals(cloud_normals, inliers_plane);
-          ROS_INFO("After plane removal: %zu points", cloud->points.size());
-        }
-        else
-        {
-          ROS_INFO("Skipping plane removal (elevated object or few points)");
-        }
-        // Check if enough points were filtered
-        if (cloud->points.size() < min_points_required)
-        {
-          if (attempt < max_retries)
+          pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>);
+          pcl::fromROSMsg(*latest_cloud_, *cloud);
+          ROS_INFO("Original cloud has %zu points", cloud->points.size());
+          // Filter by bbox
+          filterPointCloudByBBox(cloud, bbox_marker);
+          ROS_INFO("After bbox filtering: %zu points", cloud->points.size());
+          if (cloud->points.empty())
           {
-            ROS_WARN("Too few points (%zu < %d), retrying...", cloud->points.size(), min_points_required);
-            ros::Duration(retry_delay).sleep();
-            ros::spinOnce();
-            continue;
+            result_message = "No points found in bounding box region";
+            return false;
           }
-          result_message = "Too few points remaining after plane removal (< " + 
-                        std::to_string(min_points_required) + " points) after " +  std::to_string(max_retries) + " attempts";
-          return false;
-        }
-        // Fit either a box or a cylinder
-        double cylinder_score = 0.0;
-        double box_score = 0.0;
-        ObjectParams cylinder_params = fitCylinder(cloud, cloud_normals, cylinder_score);
-        ObjectParams box_params = fitBox(cloud, box_score);
-        ROS_INFO("Cylinder fit score: %.3f, Box fit score: %.3f", cylinder_score, box_score);
-        ROS_INFO("Cylinder score threshold: %.3f", cylinder_score_threshold_);
-        double height_to_width_ratio = bbox_marker.scale.z / std::max(bbox_marker.scale.x, bbox_marker.scale.y);
-        ROS_INFO("Height-to-width ratio: %.2f (>1.5 suggests cylinder)", height_to_width_ratio);
-        // Force use a box if the object is a table/plane
-        if (is_table)
-        {
-          object_params = box_params;
-          object_params.shape_type = "box";
-          ROS_INFO("Forced BOX shape for table");
-        }
-        else
-        {
-          if (cylinder_score > cylinder_score_threshold_ && (cylinder_score > box_score * 0.9 || height_to_width_ratio > 1.5))
+          // Remove plane under object
+          double bbox_bottom = bbox_marker.pose.position.z - bbox_marker.scale.z / 2.0;
+          ROS_INFO("Bounding box bottom at Z=%.3fm", bbox_bottom);
+          bool skip_plane_removal = false;
+          if (bbox_bottom > 0.05)
           {
-            object_params = cylinder_params;
-            object_params.shape_type = "cylinder";
-            ROS_INFO("Selected CYLINDER shape (tall object detected)");
+            ROS_INFO("Object is elevated (bottom > 5cm) - will skip aggressive plane removal");
+            skip_plane_removal = true;
           }
-          else if (box_score > 0.0)
+          removeOutliers(cloud);
+          ROS_INFO("After outlier removal: %zu points", cloud->points.size());
+          pcl::PointCloud<pcl::Normal>::Ptr cloud_normals(new pcl::PointCloud<pcl::Normal>);
+          computeNormals(cloud, cloud_normals);
+          pcl::PointIndices::Ptr inliers_plane(new pcl::PointIndices);
+          if (!skip_plane_removal && cloud->points.size() > 1000)
+          {
+            removePlaneSurface(cloud, inliers_plane);
+            extractNormals(cloud_normals, inliers_plane);
+            ROS_INFO("After plane removal: %zu points", cloud->points.size());
+          }
+          else
+          {
+            ROS_INFO("Skipping plane removal (elevated object or few points)");
+          }
+          // Check if enough points were filtered
+          if (cloud->points.size() < min_points_required)
+          {
+            if (attempt < max_retries)
+            {
+              ROS_WARN("Too few points (%zu < %d), retrying...", cloud->points.size(), min_points_required);
+              ros::Duration(retry_delay).sleep();
+              ros::spinOnce();
+              continue;
+            }
+            result_message = "Too few points remaining after plane removal (< " + 
+                          std::to_string(min_points_required) + " points) after " +  std::to_string(max_retries) + " attempts";
+            return false;
+          }
+          // Fit either a box or a cylinder
+          double cylinder_score = 0.0;
+          double box_score = 0.0;
+          ObjectParams cylinder_params = fitCylinder(cloud, cloud_normals, cylinder_score);
+          ObjectParams box_params = fitBox(cloud, box_score);
+          ROS_INFO("Cylinder fit score: %.3f, Box fit score: %.3f", cylinder_score, box_score);
+          ROS_INFO("Cylinder score threshold: %.3f", cylinder_score_threshold_);
+          double height_to_width_ratio = bbox_marker.scale.z / std::max(bbox_marker.scale.x, bbox_marker.scale.y);
+          ROS_INFO("Height-to-width ratio: %.2f (>1.5 suggests cylinder)", height_to_width_ratio);
+          // Force use a box if the object is a table/plane
+          if (is_table)
           {
             object_params = box_params;
             object_params.shape_type = "box";
-            ROS_INFO("Selected BOX shape");
+            ROS_INFO("Forced BOX shape for table");
+          }
+          else
+          {
+            if (cylinder_score > cylinder_score_threshold_ && (cylinder_score > box_score * 0.9 || height_to_width_ratio > 1.5))
+            {
+              object_params = cylinder_params;
+              object_params.shape_type = "cylinder";
+              ROS_INFO("Selected CYLINDER shape (tall object detected)");
+            }
+            else if (box_score > 0.0)
+            {
+              object_params = box_params;
+              object_params.shape_type = "box";
+              ROS_INFO("Selected BOX shape");
+            }
           }
         }
+        else
+        {
+          object_params.shape_type = "box";
+          object_params.box_dimensions[0] = bbox_marker.scale.x * bbox_scale_factor_;
+          object_params.box_dimensions[1] = bbox_marker.scale.y;
+          object_params.box_dimensions[2] = bbox_marker.scale.z;
+          object_params.center_pt[0] = bbox_marker.pose.position.x;
+          object_params.center_pt[1] = bbox_marker.pose.position.y;
+          object_params.center_pt[2] = bbox_marker.pose.position.z;
+        }
+        // Store measurement
+        PoseMeasurement measurement;
+        measurement.x = object_params.center_pt[0];
+        measurement.y = object_params.center_pt[1];
+        measurement.z = object_params.center_pt[2];
+        measurement.params = object_params;
+        measurement.shape_type = object_params.shape_type;
+        pose_measurements.push_back(measurement);
+        if (iteration < 5) {
+          ros::Duration(0.2).sleep();
+          ros::spinOnce();
+        }
       }
-      else
+      catch (const std::exception& e)
       {
-        object_params.shape_type = "box";
-        object_params.box_dimensions[0] = bbox_marker.scale.x * bbox_scale_factor_;
-        object_params.box_dimensions[1] = bbox_marker.scale.y;
-        object_params.box_dimensions[2] = bbox_marker.scale.z;
-        object_params.center_pt[0] = bbox_marker.pose.position.x;
-        object_params.center_pt[1] = bbox_marker.pose.position.y;
-        object_params.center_pt[2] = bbox_marker.pose.position.z;
-      }
-
-      // Add object to planning scene
-      bool added = addObjectToPlanningScene(object_params, latest_cloud_->header.frame_id, object_name);
-      if (added)
-      {
-        result_message = "Object successfully added to planning scene as " + 
-                    object_params.shape_type + " (attempt " + std::to_string(attempt) + "/" + std::to_string(max_retries) + ")";
-        return true;
+        if (attempt < max_retries)
+        {
+          ROS_WARN("Exception on attempt %d (iteration %d): %s. Skipping iteration...", attempt, iteration, e.what());
+          ros::Duration(retry_delay).sleep();
+          ros::spinOnce();
+          continue;
+        }
+        result_message = std::string("Exception occurred after ") + std::to_string(max_retries) + " attempts: " + e.what();
+        return false;
       }
     }
-    catch (const std::exception& e)
+    if (pose_measurements.empty())
     {
       if (attempt < max_retries)
       {
-        ROS_WARN("Exception on attempt %d: %s. Retrying...", attempt, e.what());
-        ros::Duration(retry_delay).sleep();
-        ros::spinOnce();
+        ROS_WARN("Failed on attempt %d to obtain any valid pose measurements after 5 iterations. Retrying...", attempt);
         continue;
       }
-      result_message = std::string("Exception occurred after ") + 
-                    std::to_string(max_retries) + " attempts: " + e.what();
+      result_message = "Failed to obtain any valid object after 5 attempts!";
       return false;
+    }
+    PoseMeasurement refined_pose = averagePoseMeasurements(pose_measurements);
+    // Add object to planning scene
+    bool added = addObjectToPlanningScene(refined_pose.params, latest_cloud_->header.frame_id, object_name);
+    if (added)
+    {
+      result_message = "Object successfully added to planning scene as " + 
+                  refined_pose.shape_type + " (attempt " + std::to_string(attempt) + "/" + std::to_string(max_retries) + ")";
+      return true;
     }
   }
   // Failed after many attempts
@@ -433,8 +460,8 @@ bool ObjectPickAndPlace::placeAsync(std::string& result_message)
   
   geometry_msgs::PoseStamped place_pose = table_pose;
   double table_height = table.primitives[0].dimensions[2];
-  place_pose.pose.position.z = table_pose.pose.position.z + table_height/2.0 + 0.05 + 0.05;
-  place_pose.pose.position.x += 0.1;
+  place_pose.pose.position.z = table_pose.pose.position.z + table_height/2.0 + 0.06;
+  place_pose.pose.position.x += 0.04;
   
   ROS_INFO("Placing on table at: [%.3f, %.3f, %.3f]", place_pose.pose.position.x, place_pose.pose.position.y, place_pose.pose.position.z);
   bool success = placeAndRelease(place_pose);
@@ -693,6 +720,53 @@ ObjectParams ObjectPickAndPlace::fitBox(const pcl::PointCloud<pcl::PointXYZ>::Pt
   ROS_INFO("Box: [%.3f x %.3f x %.3f]m, points=%zu, score=%.3f",
            params.box_dimensions[0], params.box_dimensions[1], params.box_dimensions[2], cloud->points.size(), score);
   return params;
+}
+
+PoseMeasurement ObjectPickAndPlace::averagePoseMeasurements(const std::vector<PoseMeasurement>& measurements)
+{
+  if (measurements.empty()) {
+    PoseMeasurement empty;
+    empty.x = 0; empty.y = 0; empty.z = 0;
+    return empty;
+  }
+  PoseMeasurement average;
+  average.x = 0; average.y = 0; average.z = 0;
+  average.params.box_dimensions[0] = 0;
+  average.params.box_dimensions[1] = 0;
+  average.params.box_dimensions[2] = 0;
+  // Average positions
+  for (const auto& measurement : measurements) {
+    average.x += measurement.x;
+    average.y += measurement.y;
+    average.z += measurement.z;
+    average.params.box_dimensions[0] += measurement.params.box_dimensions[0];
+    average.params.box_dimensions[1] += measurement.params.box_dimensions[1];
+    average.params.box_dimensions[2] += measurement.params.box_dimensions[2];
+  }
+  average.x /= measurements.size();
+  average.y /= measurements.size();
+  average.z /= measurements.size();
+  average.params.box_dimensions[0] /= measurements.size();
+  average.params.box_dimensions[1] /= measurements.size();
+  average.params.box_dimensions[2] /= measurements.size();
+  // Use most common shape type (mode)
+  std::map<std::string, int> shape_counts;
+  for (const auto& measurement : measurements) {
+    shape_counts[measurement.shape_type]++;
+  }
+  average.shape_type = measurements[0].shape_type;
+  int max_count = 0;
+  for (const auto& pair : shape_counts) {
+    if (pair.second > max_count) {
+      max_count = pair.second;
+      average.shape_type = pair.first;
+    }
+  }
+  average.params.shape_type = average.shape_type;
+  average.params.center_pt[0] = average.x;
+  average.params.center_pt[1] = average.y;
+  average.params.center_pt[2] = average.z;
+  return average;
 }
 
 bool ObjectPickAndPlace::addObjectToPlanningScene(const ObjectParams& params, const std::string& cloud_frame, const std::string& object_name)
@@ -1035,6 +1109,9 @@ bool ObjectPickAndPlace::placeAndRelease(const geometry_msgs::PoseStamped& place
   ROS_INFO(">>> STEP 2: Moving to pre-release position...");
   geometry_msgs::PoseStamped pre_place_pose = place_pose;
   pre_place_pose.pose.position.z += 0.1;
+  tf2::Quaternion q;
+  q.setRPY(M_PI, 0, M_PI/2); // Pointing downward
+  pre_place_pose.pose.orientation = tf2::toMsg(q);
   arm_group_->setPoseTarget(pre_place_pose);
   if (!arm_group_->move())
   {
@@ -1056,7 +1133,7 @@ bool ObjectPickAndPlace::placeAndRelease(const geometry_msgs::PoseStamped& place
   }
   // Final waypoint at table surface
   geometry_msgs::Pose final_pose = start_pose;
-  final_pose.position.z = place_pose.pose.position.z + 0.02;  // 2 cm above table surface
+  final_pose.position.z = place_pose.pose.position.z + 0.01;  // 1 cm above table surface
   waypoints.push_back(final_pose);
   // Compute Cartesian path
   moveit_msgs::RobotTrajectory trajectory;
@@ -1088,7 +1165,7 @@ bool ObjectPickAndPlace::placeAndRelease(const geometry_msgs::PoseStamped& place
   }
   ROS_INFO(">>> STEP 7: Moving back to pre-place...");
   geometry_msgs::PoseStamped retreat_pose = place_pose;
-  retreat_pose.pose.position.x -= 0.05;
+  retreat_pose.pose.position.z -= 0.05;
   arm_group_->setPoseTarget(retreat_pose);
   arm_group_->move();
   ROS_INFO(">>> STEP 8: Returning to home position...");
