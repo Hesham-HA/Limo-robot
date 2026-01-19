@@ -16,14 +16,14 @@
     <!--  **************** Passive Graph SLAM ****************  -->
     <group ns="rtabmap">
         <node name="rtabmap" pkg="rtabmap_slam" type="rtabmap" args="--delete_db_on_start">
-            <param name="frame_id" type="string" value="base_footprint"/>
+            <param name="frame_id" type="string" value="base_link"/>
             <remap from="odom" to="/odom"/>
             <param name="subscribe_scan" type="bool" value="true"/>
-            <remap from="scan" to="/limo/scan"/>
+            <remap from="scan" to="/scan"/>
             <param name="subscribe_depth" type="bool" value="true"/>
-            <remap from="rgb/image"       to="/limo/color/image_raw"/>
-            <remap from="depth/image"     to="/limo/depth/image_raw"/>
-            <remap from="rgb/camera_info" to="/limo/color/camera_info"/>
+            <remap from="rgb/image"       to="/camera/color/image_raw"/>
+            <remap from="depth/image"     to="/camera/depth/image_raw"/>
+            <remap from="rgb/camera_info" to="/camera/color/camera_info"/>
             <param name="rgb/image_transport"   type="string" value="compressed"/>
             <param name="depth/image_transport" type="string" value="raw"/>
             <param name="sync_queue_size" type="int" value="20"/>
@@ -42,7 +42,7 @@
         </node>
         <!-- For visualization of detected objects -->
         <node name="save_objects_example" pkg="rtabmap_demos" type="save_objects_example">
-            <param name="frame_id" value="base_footprint"/>
+            <param name="frame_id" value="base_link"/>
         </node>
     </group>
 
@@ -62,7 +62,7 @@
 	</node>
 
     <!-- Use simulation time -->
-    <param name="use_sim_time" value="true"/>
+    <param name="use_sim_time" value="false"/>
 
     <!--  **************** feature-based Object Detection ****************  -->
     <node unless="$(arg color_detection)" name="find_object_3d" pkg="find_object_2d" type="find_object_2d">
@@ -76,25 +76,22 @@
         <param name="settings_path" value="$(find pick_place)/config/find_object.ini"/>
 
         <!-- Camera topics -->
-        <remap from="rgb/image_rect_color" to="/limo/color/image_raw"/>
-        <remap from="depth_registered/image_raw" to="/limo/depth/image_raw"/>
-        <remap from="depth_registered/camera_info" to="/limo/depth/camera_info"/>
+        <remap from="rgb/image_rect_color" to="/camera/color/image_raw"/>
+        <remap from="depth_registered/image_raw" to="/camera/depth/image_raw"/>
+        <remap from="depth_registered/camera_info" to="/camera/depth/camera_info"/>
         <param name="rgb/image_transport" value="compressed"/>
         <param name="depth_registered/image_transport" value="raw"/>
     </node>
     <node unless="$(arg color_detection)" name="object_extractor" pkg="pick_place" type="object_extractor.py">
 		<param name="object_prefix" value="object" type="str"/>
         <param name="target_frame_id" value="depth_link"/>
-        <remap from="/camera/color/camera_info" to="/limo/color/camera_info" />
+        <!-- <remap from="/camera/color/camera_info" to="/camera/color/camera_info" /> -->
 	</node>
     
     <!--  **************** color-based Object Detection ****************  -->
     <node if="$(arg color_detection)" name="color_detection" pkg="pick_place" type="color_detection">
         <!-- Main settings -->
-        <remap from="/camera/color/camera_info" to="/limo/color/camera_info"/>
-        <remap from="/camera/color/image_raw" to="/limo/color/image_raw"/>
-        <remap from="/camera/depth/image_raw" to="/limo/depth/image_raw"/>
-        <param name="target_frame_id" value="depth_link"/>
+        <param name="target_frame_id" value="camera_depth_frame"/>
         <param name="objects_path" value="$(find pick_place)/objects/colored_objects"/>
         <!-- Color extraction parameters -->
         <param name="hsv_tolerance" value="10" type="int"/>  <!-- HSV tolerance in degrees (0-180) -->
@@ -107,7 +104,7 @@
         <param name="area_weight" value="0.20" type="double"/>               <!-- Size preference -->
         <param name="depth_quality_weight" value="0.05" type="double"/>      <!-- Depth reliability -->
         <!-- Confidence score threshold -->
-        <param name="score_threshold" value="0.80" type="double"/> 
+        <param name="score_threshold" value="0.65" type="double"/> 
         <!-- Detection parameters -->
         <param name="min_contour_area" value="20" type="int"/>
         <param name="max_contour_area" value="50000" type="int"/>

@@ -11,7 +11,7 @@
 
 	<!--  ************** Localization ***************  -->
 	<node pkg="amcl" type="amcl" name="amcl" output="screen">
-		<remap from="scan" to="/limo/scan"/>
+		<remap from="scan" to="/scan"/>
         <rosparam file="$(find pick_place)/param/amcl_params_diff.yaml" command="load"/>
 	    <param name="initial_pose_x"            value="0"/>
 		<param name="initial_pose_y"            value="0"/>
@@ -21,7 +21,6 @@
 
     <!--  ************** Navigation ***************  -->
 	<node pkg="move_base" type="move_base" respawn="false" name="move_base" output="screen">
-		<remap from="scan" to="/limo/scan"/>
   	  	<rosparam file="$(find pick_place)/param/costmap_common_params.yaml" command="load" ns="global_costmap"/>
   	 	<rosparam file="$(find pick_place)/param/costmap_common_params.yaml" command="load" ns="local_costmap"/>
   		<rosparam file="$(find pick_place)/param/local_costmap_params.yaml" command="load"/>

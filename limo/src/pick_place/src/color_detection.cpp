@@ -48,15 +48,15 @@ public:
         // Initialize publishers
         marker_pub_ = nh_.advertise<visualization_msgs::MarkerArray>("/detection/object", 10);
         pose_pub_ = nh_.advertise<geometry_msgs::PoseStamped>("/detection/pose", 10);
-        debug_image_pub_ = it_.advertise("/detection/debug_image", 1);
-        mask_image_pub_ = it_.advertise("/detection/mask_image", 1);
+        debug_image_pub_ = it_.advertise("/detection/debug_image", 10);
+        mask_image_pub_ = it_.advertise("/detection/mask_image", 10);
         
         // Subscribe to camera info
         camera_info_sub_ = nh_.subscribe("/camera/color/camera_info", 1, &DynamicColorDetector::cameraInfoCallback, this);
         
         // Setup synchronized subscribers
-        rgb_sub_.subscribe(nh_, "/camera/color/image_raw", 1);
-        depth_sub_.subscribe(nh_, "/camera/depth/image_raw", 1);
+        rgb_sub_.subscribe(nh_, "/camera/color/image_raw", 10);
+        depth_sub_.subscribe(nh_, "/camera/depth/image_raw", 10);
         
         sync_.reset(new Sync(SyncPolicy(10), rgb_sub_, depth_sub_));
         sync_->registerCallback(boost::bind(&DynamicColorDetector::imageCallback, this, _1, _2));
