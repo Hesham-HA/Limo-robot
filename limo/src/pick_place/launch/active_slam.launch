@@ -6,7 +6,8 @@
 	<!--  **************** Pose estimation ****************  -->
     <node pkg="robot_pose_ekf" name="robot_pose_ekf" type="robot_pose_ekf">
         <param name="output_frame" value="odom" />
-        <param name="base_link_frame" value="base_link"/>
+        <param name="base_footprint_frame" value="base_footprint"/>
+		<param name="base_frame_id" value="base_link" />
         <remap from="imu_data" to="imu_link" />
 		<param name="publish_tf" value="true" />
     </node>
@@ -27,16 +28,16 @@
 		<param name="srt" value="0.2"/>
 		<param name="str" value="0.1"/>
 		<param name="stt" value="0.2"/>
-		<param name="linearUpdate" value="1.0"/>
-		<param name="angularUpdate" value="0.5"/>
+		<param name="linearUpdate" value="0.02"/>
+		<param name="angularUpdate" value="0.02"/>
 		<param name="temporalUpdate" value="3.0"/>
 		<param name="resampleThreshold" value="0.5"/>
 		<param name="particles" value="30"/>
-		<param name="xmin" value="-50.0"/>
-		<param name="ymin" value="-50.0"/>
-		<param name="xmax" value="50.0"/>
-		<param name="ymax" value="50.0"/>
-		<param name="delta" value="0.05"/>
+		<param name="xmin" value="-5.0"/>
+		<param name="ymin" value="-5.0"/>
+		<param name="xmax" value="5.0"/>
+		<param name="ymax" value="5.0"/>
+		<param name="delta" value="0.01"/>
 		<param name="llsamplerange" value="0.01"/>
 		<param name="llsamplestep" value="0.01"/>
 		<param name="lasamplerange" value="0.005"/>
@@ -52,7 +53,7 @@
   		<rosparam file="$(find pick_place)/param/planner.yaml" command="load"/>
 		<param name="static_layer/map_topic" value="/map"/>
 		<param name="global_costmap/global_frame" value="$(arg map_frame_id)"/>
-		<param name="local_costmap/global_frame" value="$(arg map_frame_id)"/>
+		<param name="local_costmap/global_frame" value="odom"/>
 
 		<param name="base_global_planner" value="global_planner/GlobalPlanner"/>
 		<param name="planner_frequency" value="1.0"/>
@@ -65,16 +66,16 @@
 	</node>
     
 	<!--  ************** exploration ***************  -->
-	<node pkg="explore_lite" type="explore" respawn="false" name="explore" output="screen" launch-prefix="bash -c 'sleep 12; $0 $@'">
-		<param name="robot_base_frame" value="base_link"/>
-		<param name="costmap_topic" value="/move_base/local_costmap/costmap"/>
-		<param name="costmap_updates_topic" value="/move_base/local_costmap/costmap_updates"/>
+	<node pkg="explore_lite" type="explore" respawn="false" name="explore" output="screen" launch-prefix="bash -c 'sleep 25; $0 $@'">
+		<param name="robot_base_frame" value="base_footprint"/>
+		<param name="costmap_topic" value="/move_base/global_costmap/costmap"/>
+		<param name="costmap_updates_topic" value="/move_base/global_costmap/costmap_updates"/>
 		<param name="visualize" value="true"/>
 		<param name="planner_frequency" value="0.1"/>
 		<param name="progress_timeout" value="20.0"/>
-		<param name="potential_scale" value="1.0"/>
+		<param name="potential_scale" value="20.0"/>
 		<param name="orientation_scale" value="0.0"/>
-		<param name="gain_scale" value="1.0"/>
+		<param name="gain_scale" value="2.0"/>
 		<param name="transform_tolerance" value="0.9"/>
 		<param name="min_frontier_size" value="0.1"/>
 	</node>

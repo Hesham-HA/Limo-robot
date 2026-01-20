@@ -11,7 +11,7 @@
   <arg name="fake_execution_type" default="interpolate" />
 
   <!-- Run the main MoveIt executable without trajectory execution (we do not have controllers configured by default) -->
-  <include file="$(find limo_cobot_moveit)/launch/move_group.launch">
+  <include file="$(find limo_cobot_moveit_config)/launch/move_group.launch">
     <arg name="allow_trajectory_execution" value="true"/>
     <arg name="moveit_controller_manager" value="$(arg moveit_controller_manager)"/>
     <arg name="fake_execution_type" value="$(arg fake_execution_type)"/>
@@ -22,8 +22,8 @@
   </include>
 
   <!-- Run Rviz and load the default config to see the state of the move_group node -->
-  <include file="$(find limo_cobot_moveit)/launch/moveit_rviz.launch" if="$(arg use_rviz)">
-    <arg name="rviz_config" value="$(find pick_place)/config/moveit.rviz"/>
+  <include file="$(find limo_cobot_moveit_config)/launch/moveit_rviz.launch" if="$(arg use_rviz)">
+    <arg name="rviz_config" value="$(find limo_cobot_moveit_config)/launch/moveit.rviz"/>
     <arg name="debug" value="$(arg debug)"/>
   </include>
 </launch>

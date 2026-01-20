@@ -1,0 +1,11 @@
+moveit_setup_assistant_config:
+  URDF:
+    package: limo_description
+    relative_path: urdf/limo_mycobot.xacro
+    xacro_args: ""
+  SRDF:
+    relative_path: config/limo_mycobot.srdf
+  CONFIG:
+    author_name: agilex
+    author_email: agilex@agilex.ai
+    generated_timestamp: 1690429841
